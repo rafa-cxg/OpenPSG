@@ -28,19 +28,31 @@ train_dataset = PSGClsDataset(stage='train')
 train_dataloader = DataLoader(train_dataset,
                               batch_size=args.batch_size,
                               shuffle=True,
+<<<<<<< HEAD
                               num_workers=0)
+=======
+                              num_workers=8)
+>>>>>>> 23f9c89d43eeaa6e4ee57895d11ac9fb3546fd47
 
 val_dataset = PSGClsDataset(stage='val')
 val_dataloader = DataLoader(val_dataset,
                             batch_size=32,
                             shuffle=False,
+<<<<<<< HEAD
                             num_workers=0)
+=======
+                            num_workers=8)
+>>>>>>> 23f9c89d43eeaa6e4ee57895d11ac9fb3546fd47
 
 test_dataset = PSGClsDataset(stage='test')
 test_dataloader = DataLoader(test_dataset,
                              batch_size=32,
                              shuffle=False,
+<<<<<<< HEAD
                              num_workers=0)
+=======
+                             num_workers=8)
+>>>>>>> 23f9c89d43eeaa6e4ee57895d11ac9fb3546fd47
 print('Data Loaded...', flush=True)
 
 # loading model
