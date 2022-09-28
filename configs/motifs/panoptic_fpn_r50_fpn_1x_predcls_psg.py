@@ -204,7 +204,9 @@ freeze_modules = [
 evaluation = dict(interval=1,
                   metric='predcls',
                   relation_mode=True,
-                  classwise=True)
+                  classwise=True,
+                  save_best='predcls_score',
+                  greater_keys='predcls_score')
 
 # Change batch size and learning rate
 data = dict(samples_per_gpu=1, )

@@ -176,9 +176,13 @@ def format_result_dict(result_dict, result_str, mode):
             formatted[mode + '_accuracy_hit_' + 'A_%d' % k] = a_hit / a_count
             copy_stat_str += (mode + '_accuracy_hit_' + 'A_%d: ' % k +
                               '{:0.3f}'.format(a_hit / a_count) + '\n')
+    copy_stat_str += (mode + 'score' +
+                      '{:0.3f}'.format(0.6*formatted[mode + '_mean_recall_' + 'mR_20']+formatted[mode + '_recall_' + 'R_20']*0.3) + '\n')
     formatted[mode + '_copystat'] = copy_stat_str
 
     formatted[mode + '_runtime_eval_str'] = result_str
+    #add competation score result
+    formatted[mode + '_score']=0.6*formatted[mode + '_mean_recall_' + 'mR_20']+formatted[mode + '_recall_' + 'R_20']*0.3
     return formatted
 
 
