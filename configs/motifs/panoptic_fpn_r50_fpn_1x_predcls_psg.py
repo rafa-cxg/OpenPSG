@@ -207,7 +207,7 @@ evaluation = dict(interval=1,
                   classwise=True)
 
 # Change batch size and learning rate
-data = dict(samples_per_gpu=16, )
+data = dict(samples_per_gpu=1, )
 # optimizer = dict(lr=0.003)
 optimizer = dict(type='SGD', lr=0.03, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(_delete_=True,

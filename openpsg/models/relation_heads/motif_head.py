@@ -143,11 +143,9 @@ class MotifHead(RelationHead):
 
         rel_scores = self.rel_compress(prod_rep)
 
-<<<<<<< HEAD
+
         if self.use_bias:#default false
-=======
-        if self.use_bias:
->>>>>>> 23f9c89d43eeaa6e4ee57895d11ac9fb3546fd47
+
             rel_scores = rel_scores + self.freq_bias.index_with_labels(
                 pair_pred.long())
 
@@ -169,11 +167,9 @@ class MotifHead(RelationHead):
         det_result.rel_scores = rel_scores
 
         # ranking prediction:
-<<<<<<< HEAD
+
         if self.with_relation_ranker:#todo why default is false?
-=======
-        if self.with_relation_ranker:
->>>>>>> 23f9c89d43eeaa6e4ee57895d11ac9fb3546fd47
+
             det_result = self.relation_ranking_forward(prod_rep, det_result,
                                                        gt_result, num_rels,
                                                        is_testing)

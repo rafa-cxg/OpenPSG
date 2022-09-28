@@ -94,13 +94,13 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
                 d for d in dataset['data']
                 if d['image_id'] not in dataset['test_image_ids']
             ]
-            # self.data = self.data[:16] # for quick debug
+            self.data = self.data[:16] # for quick debug
         elif split == 'test':
             self.data = [
                 d for d in dataset['data']
                 if d['image_id'] in dataset['test_image_ids']
             ]
-            # self.data = self.data[:1000] # for quick debug
+            self.data = self.data[:100] # for quick debug
         #---------------resample-------------#
         if self.resample!= None:
             self.repeat_dict=self.resample.resampling_dict_generation(self.data,dataset['predicate_classes'])
