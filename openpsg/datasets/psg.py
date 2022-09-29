@@ -94,13 +94,13 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
                 d for d in dataset['data']
                 if d['image_id'] not in dataset['test_image_ids']
             ]
-            self.data = self.data[:16] # for quick debug
+            # self.data = self.data[:16] # for quick debug
         elif split == 'test':
             self.data = [
                 d for d in dataset['data']
                 if d['image_id'] in dataset['test_image_ids']
             ]
-            self.data = self.data[:100] # for quick debug
+            # self.data = self.data[:100] # for quick debug
         #---------------resample-------------#
         if self.resample!= None:
             self.repeat_dict=self.resample.resampling_dict_generation(self.data,dataset['predicate_classes'])
@@ -493,11 +493,22 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
         freq_matrix = np.zeros(
             (num_obj_classes, num_obj_classes, num_rel_classes + 1),
             dtype=np.float)
-        progbar = mmcv.ProgressBar(len(self.data))
+        progbar = mmcv.ProgressBar(len(self))
 
-        for d in self.data:
+        for idx in range(len(self)):
+            d=self.data[self.idx_list[idx]] if self.resample else self.data[idx]
+            idx=self.idx_list[idx] if self.resample else idx
             segments = d['segments_info']
-            relations = d['relations']
+            relations = np.array(d['relations'].copy())
+            if self.resample is not None and self.split == 'train':  # 不加判断是否train会导致val的dataset也会对relation重复采样！
+                relations, relation_non_masked = self.resample(idx,
+                                                              relations,
+                                                              self.repeat_dict,
+                                                              self.drop_rate, )
+            # add relation to target
+
+            # relations = relations[np.nonzero(relations[:, -1] > 0)]  # 只保留不为-1的relation
+
 
             for rel in relations:
                 object_index = segments[rel[0]]['category_id']

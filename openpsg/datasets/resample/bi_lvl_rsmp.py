@@ -66,6 +66,7 @@ class BGNN_Resample():
                 ignored_rel = np.random.uniform(0, 1, len(selected_head_rel_idx))
                 total_repeat_times = r_c#当前图片重复次数
 
+
                 rel_repeat_time = np.array([rc_cls[rel] for rel in relation[:, -1]])#生成该图片所有rel的重复次数
 
                 drop_rate = (1 - (rel_repeat_time / (total_repeat_times + 1e-11) ))  * drop_rate#该rel需重复次数越多，drop rate越小，但该图片出现次数越多，drop越大

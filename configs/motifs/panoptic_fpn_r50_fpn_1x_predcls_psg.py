@@ -7,7 +7,7 @@ _base_ = [
 
 find_unused_parameters = True
 dataset_type = 'PanopticSceneGraphDataset'
-
+dataset_config={'cache':'./freq.cache'}
 # HACK:
 object_classes = [
     'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
@@ -127,7 +127,9 @@ model = dict(
         predicate_classes=predicate_classes,
         num_classes=len(object_classes) + 1,  # with background class
         num_predicates=len(predicate_classes) + 1,
-        use_bias=False,  # NOTE: whether to use frequency bias
+        use_bias=True,  # NOTE: whether to use frequency bias
+        use_statistics= True, #keep same with above
+        dataset_config=dataset_config,
         head_config=dict(
             # NOTE: Evaluation type
             use_gt_box=True,
