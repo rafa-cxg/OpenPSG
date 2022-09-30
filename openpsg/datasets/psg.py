@@ -507,7 +507,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
                                                               self.drop_rate, )
             # add relation to target
 
-            # relations = relations[np.nonzero(relations[:, -1] > 0)]  # 只保留不为-1的relation
+            relations = relations[np.nonzero(relations[:, -1] > 0)]  # 只保留不为-1的relation
 
 
             for rel in relations:

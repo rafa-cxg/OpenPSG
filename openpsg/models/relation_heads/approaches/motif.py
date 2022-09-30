@@ -44,7 +44,7 @@ class FrequencyBias(nn.Module):
         :param labels: [batch_size, 2]
         :return:
         """
-        ret = self.obj_baseline(labels[:, 0] * self.num_objs + labels[:, 1])
+        ret = self.obj_baseline((labels[:, 0]-1) * self.num_objs + (labels[:, 1]-1))
         if ret.isnan().any():
             print('motif: nan')
         return ret

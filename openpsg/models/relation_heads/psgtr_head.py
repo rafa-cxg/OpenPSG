@@ -21,6 +21,8 @@ from mmdet.models.utils import build_transformer
 #####imports for tools
 from packaging import version
 
+from openpsg.models.relation_heads.approaches import FrequencyBias
+
 if version.parse(torchvision.__version__) < version.parse('0.7'):
     from torchvision.ops import _new_empty_tensor
     from torchvision.ops.misc import _output_size
@@ -80,6 +82,9 @@ class PSGTrHead(AnchorFreeHead):
                 r_cls_cost=dict(type='ClassificationCost', weight=2.))),
             test_cfg=dict(max_per_img=100),
             init_cfg=None,
+            dataset_config=None,
+            use_bias=False,
+            with_statistics=False,
             **kwargs):
 
         super(AnchorFreeHead, self).__init__(init_cfg)
@@ -213,7 +218,18 @@ class PSGTrHead(AnchorFreeHead):
             f' be exactly 2 times of num_feats. Found {self.embed_dims}' \
             f' and {num_feats}.'
         self._init_layers()
-
+        self.use_bias=use_bias
+        self.with_statistics=with_statistics
+        self.dataset_config=dataset_config
+        if self.with_statistics:
+            cache_dir = dataset_config['cache']
+            self.statistics = torch.load(cache_dir,
+                                         map_location=torch.device('cpu'))
+            print('\n Statistics loaded!')
+        if self.use_bias:
+            assert self.with_statistics
+            # convey statistics into FrequencyBias to avoid loading again
+            self.freq_bias = FrequencyBias(self.init_cfg, self.statistics)
     def _init_layers(self):
         """Initialize layers of the transformer head."""
         self.input_proj = Conv2d(self.in_channels,
@@ -309,6 +325,10 @@ class PSGTrHead(AnchorFreeHead):
 
         all_cls_scores = dict(sub=sub_outputs_class, obj=obj_outputs_class)
         rel_outputs_class = self.rel_cls_embed(outs_dec)
+        if self.use_bias:#default false
+            pair_pred=torch.cat((torch.argmax(sub_outputs_class,-1,keepdim=True),torch.argmax(obj_outputs_class,-1,keepdim=True)),-1)
+            rel_outputs_class = rel_outputs_class + self.freq_bias.index_with_labels(
+                pair_pred.long())
         all_cls_scores['rel'] = rel_outputs_class
         if self.use_mask:
             ###########for segmentation#################

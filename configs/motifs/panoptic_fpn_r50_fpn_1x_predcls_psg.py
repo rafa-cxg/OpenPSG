@@ -93,7 +93,6 @@ predicate_classes = [
     'enclosing',
     'leaning on',
 ]
-
 model = dict(
     type='SceneGraphPanopticFPN',
     semantic_head=dict(

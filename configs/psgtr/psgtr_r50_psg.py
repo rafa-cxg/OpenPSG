@@ -11,7 +11,8 @@ custom_imports = dict(imports=[
     'openpsg.models.relation_heads.approaches.matcher', 'openpsg.utils'
 ],
                       allow_failed_imports=False)
-
+dataset_resample= dict(type='BGNN_Resample',method='bilvl',RESAMPLING_PARAM=dict(REPEAT_FACTOR=0.012,INSTANCE_DROP_RATE=1.2))
+dataset_config={'cache':'./freq.cache'}
 dataset_type = 'PanopticSceneGraphDataset'
 
 # HACK:
@@ -101,6 +102,9 @@ predicate_classes = [
 ]
 
 model = dict(bbox_head=dict(
+dataset_config=dataset_config,
+                   use_bias=True,
+                   with_statistics=True,
     num_classes=len(object_classes),
     num_relations=len(predicate_classes),
     object_classes=object_classes,
@@ -188,11 +192,14 @@ evaluation = dict(
     classwise=True,
     iou_thrs=0.5,
     detection_method='pan_seg',
+    save_best='sgdet_score',
+    greater_keys='sgdet_score'
 )
 
 data = dict(samples_per_gpu=1,
             workers_per_gpu=2,
-            train=dict(pipeline=train_pipeline),
+            train=dict(pipeline=train_pipeline,
+                       resample= dataset_resample),
             val=dict(pipeline=test_pipeline),
             test=dict(pipeline=test_pipeline))
 # optimizer
@@ -230,4 +237,4 @@ log_config = dict(
     ],
 )
 
-load_from = 'work_dirs/checkpoints/detr_pan_r50.pth'
+# load_from = 'work_dirs/checkpoints/detr_pan_r50.pth'

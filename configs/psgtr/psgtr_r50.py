@@ -1,5 +1,7 @@
+
+
 model = dict(
-    type='PSGTr',
+    type='PSGTr',#PSGTr(SingleStageDetector)
     backbone=dict(type='ResNet',
                   depth=50,
                   num_stages=4,
@@ -11,6 +13,7 @@ model = dict(
                   init_cfg=dict(type='Pretrained',
                                 checkpoint='torchvision://resnet50')),
     bbox_head=dict(type='PSGTrHead',
+
                    num_classes=80,
                    num_relations=117,
                    in_channels=2048,
