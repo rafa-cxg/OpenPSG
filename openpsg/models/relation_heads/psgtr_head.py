@@ -326,7 +326,7 @@ class PSGTrHead(AnchorFreeHead):
         all_cls_scores = dict(sub=sub_outputs_class, obj=obj_outputs_class)
         rel_outputs_class = self.rel_cls_embed(outs_dec)
         if self.use_bias:#default false
-            pair_pred=torch.cat((torch.argmax(sub_outputs_class,-1,keepdim=True),torch.argmax(obj_outputs_class,
+            pair_pred=torch.cat((torch.argmax(sub_outputs_class[:,:,:,1:],-1,keepdim=True),torch.argmax(obj_outputs_class[:,:,:,1:],
                                                     -1,keepdim=True)),-1).squeeze(1).view(-1,2)#去掉batch dim
             rel_outputs_class = rel_outputs_class + self.freq_bias.index_with_labels(
                 pair_pred.long()).view(outs_dec.shape[0],batch_size,-1,self.num_relations+1)
