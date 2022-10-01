@@ -44,10 +44,10 @@ class FrequencyBias(nn.Module):
         :param labels: [batch_size, 2]
         :return:
         """
-        for i in range(labels.shape[0]):
-            if (labels[i, 0] ) * self.num_objs + (labels[i, 1] )>=self.num_objs*self.num_objs or (labels[i, 0] ) * self.num_objs + (labels[i, 1] )<0:
-
-                print('fuck {},{}'.format(labels[i, 0],labels[i, 1]))
+        # for i in range(labels.shape[0]):
+        #     if (labels[i, 0] ) * self.num_objs + (labels[i, 1] )>=self.num_objs*self.num_objs or (labels[i, 0] ) * self.num_objs + (labels[i, 1] )<0:
+        #
+        #         print('fuck {},{}'.format(labels[i, 0],labels[i, 1]))
         ret = self.obj_baseline((labels[:, 0]) * self.num_objs + (labels[:, 1]))
         # if ret.isnan().any():
         #     print('motif: nan')
