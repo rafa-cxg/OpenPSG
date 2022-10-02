@@ -475,7 +475,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
     def get_statistics(self):
         freq_matrix = self.get_freq_matrix()
         eps = 1e-3
-        freq_matrix += eps
+        # freq_matrix += eps
         pred_dist = np.log(freq_matrix / freq_matrix.sum(2)[:, :, None] + eps)
 
         result = {
@@ -491,32 +491,85 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
         num_rel_classes = len(self.PREDICATES)
 
         freq_matrix = np.zeros(
-            (num_obj_classes, num_obj_classes, num_rel_classes + 1),
+            (num_obj_classes+1, num_obj_classes+1, num_rel_classes + 1),
             dtype=np.float)
-        progbar = mmcv.ProgressBar(len(self))
+        bg_matrix=np.zeros(
+            (num_obj_classes+1, num_obj_classes+1),
+            dtype=np.float)
+        progbar = mmcv.ProgressBar(len(self.data))
 
-        for idx in range(len(self)):
-            d=self.data[self.idx_list[idx]] if self.resample else self.data[idx]
-            idx=self.idx_list[idx] if self.resample else idx
+        for idx in range(len(self.data)):
+            # d=self.data[self.idx_list[idx]] if self.resample else self.data[idx]
+            # idx=self.idx_list[idx] if self.resample else idx
+            d=self.data[idx]
             segments = d['segments_info']
             relations = np.array(d['relations'].copy())
-            if self.resample is not None and self.split == 'train':  # 不加判断是否train会导致val的dataset也会对relation重复采样！
-                relations, relation_non_masked = self.resample(idx,
-                                                              relations,
-                                                              self.repeat_dict,
-                                                              self.drop_rate, )
-            # add relation to target
-
-            relations = relations[np.nonzero(relations[:, -1] > 0)]  # 只保留不为-1的relation
+            # if self.resample is not None and self.split == 'train':  # 不加判断是否train会导致val的dataset也会对relation重复采样！
+            #     relations, relation_non_masked = self.resample(idx,
+            #                                                   relations,
+            #                                                   self.repeat_dict,
+            #                                                   self.drop_rate, )
+            # # add relation to target
+            #
+            # relations = relations[np.nonzero(relations[:, -1] > 0)]  # 只保留不为-1的relation
 
 
             for rel in relations:
                 object_index = segments[rel[0]]['category_id']
                 subject_index = segments[rel[1]]['category_id']
+
                 relation_index = rel[2]
 
                 freq_matrix[object_index, subject_index, relation_index] += 1
 
-            progbar.update()
+                # For the background, get all of the things that overlap.
+            gt_boxes = np.asarray([d['annotations'][i]['bbox'] for i in range(len(d['annotations']))])
+            gt_classes=np.asarray([d['annotations'][i]['category_id'] for i in range(len(d['annotations']))])
+            o1o2_total = gt_classes[np.array(
+                box_filter(gt_boxes, must_overlap=False), dtype=int)]  # 所有gt box但凡overlap的，两两组合
+            for (o1, o2) in o1o2_total:
+                bg_matrix[o1, o2] += 1
 
+            progbar.update()
+        bg_matrix += 1
+        freq_matrix[:,:,0]=freq_matrix[:,:,0]+bg_matrix
         return freq_matrix
+def box_filter(boxes, must_overlap=False):
+    """ Only include boxes that overlap as possible relations.
+    If no overlapping boxes, use all of them."""
+    n_cands = boxes.shape[0]
+
+    overlaps = bbox_overlaps(boxes.astype(#[n,n]
+        np.float), boxes.astype(np.float), to_move=0) > 0
+    np.fill_diagonal(overlaps, 0)#对角线设置0
+
+    all_possib = np.ones_like(overlaps, dtype=np.bool)
+    np.fill_diagonal(all_possib, 0)
+
+    if must_overlap:
+        possible_boxes = np.column_stack(np.where(overlaps))
+
+        if possible_boxes.size == 0:
+            possible_boxes = np.column_stack(np.where(all_possib))
+    else:
+        possible_boxes = np.column_stack(np.where(all_possib))
+    return possible_boxes
+
+def bbox_overlaps(boxes1, boxes2, to_move=1):
+    """
+    boxes1 : numpy, [num_obj, 4] (x1,y1,x2,y2)
+    boxes2 : numpy, [num_obj, 4] (x1,y1,x2,y2)
+    """
+    # print('boxes1: ', boxes1.shape)
+    # print('boxes2: ', boxes2.shape)
+    num_box1 = boxes1.shape[0]
+    num_box2 = boxes2.shape[0]
+    lt = np.maximum(boxes1.reshape([num_box1, 1, -1])[:, :, : 2],
+                    boxes2.reshape([1, num_box2, -1])[:, :, :2])  # [N,M,2]
+    rb = np.minimum(boxes1.reshape([num_box1, 1, -1])[:, :, 2:],
+                    boxes2.reshape([1, num_box2, -1])[:, :, 2:])  # [N,M,2]
+
+    wh = (rb - lt + to_move).clip(min=0)  # [N,M,2]
+    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+    return inter
