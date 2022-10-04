@@ -151,7 +151,7 @@ def encode_rel_box_info(meta,sub_boxs,obj_boxs,rel_pair_idxs):#todo 和上面的
         # obj_x, obj_y = obj_xy.split([1, 1], dim=-1)#
         # obj_x1, obj_y1, obj_x2, obj_y2 = obj_box.split([1, 1, 1, 1], dim=-1)
 
-        distance=torch.pow(( torch.pow((sub_x-obj_x)/wid,2)+torch.pow((sub_y-obj_y)/hei,2)),0.5)
+        distance=torch.pow(( torch.pow((sub_x-obj_x),2)+torch.pow((sub_y-obj_y),2)),0.5)
 
         # iou_=(sub_x2-obj_x1)*(sub_y2-obj_y1)/(obj_h*obj_w+sub_h*sub_w-(sub_x2-obj_x1)*(sub_y2-obj_y1))#错的
         sub_box = bbox_cxcywh_to_xyxy(sub_box)
