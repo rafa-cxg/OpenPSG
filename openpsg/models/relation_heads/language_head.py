@@ -5,7 +5,6 @@ import math
 from ..relation_heads.approaches.motif_util import \
     obj_edge_vectors
 from mmdet.core import bbox_overlaps
-from pysgg.modeling.roi_heads.relation_head.model_gpsnet import GPSNetContext
 from torch import nn
 from torch.nn import functional as F,init
 
@@ -80,7 +79,7 @@ class TwoStagePredictor(nn.Module):
 
         # for sub_box, obj_box, rel_pair_idx,image_meta,rel_info in zip(sub_boxs[:], obj_boxs[:] ,rel_pair_idxs[:],image_metas,rel_infos):
         sub_prop_infos = encode_box_info(sub_boxs)  # todo 重复计算会有点慢，改为一次计算不重复的所有box
-        obj_prop_infos = encode_box_info(sub_boxs)
+        obj_prop_infos = encode_box_info(obj_boxs)
         sub_prop_infos=torch.cat(sub_prop_infos,0)
         obj_prop_infos = torch.cat(obj_prop_infos, 0)
         sub_proj = self.sub_proj(self.sub_embed(rel_pair_idxs[:,:,0]))

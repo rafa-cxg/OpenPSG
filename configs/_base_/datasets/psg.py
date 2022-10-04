@@ -8,7 +8,7 @@ coco_root = './data/coco'
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53],
                     std=[58.395, 57.12, 57.375],
                     to_rgb=True)
-dataset_resample= dict(type='BGNN_Resample',method='bilvl',RESAMPLING_PARAM=dict(REPEAT_FACTOR=0.012,INSTANCE_DROP_RATE=1.2))
+dataset_resample= dict(type='BGNN_Resample',method='bilvl',RESAMPLING_PARAM=dict(REPEAT_FACTOR=0.013,INSTANCE_DROP_RATE=1.6))
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
