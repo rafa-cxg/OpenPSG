@@ -70,7 +70,9 @@ class PSGTrHead(AnchorFreeHead):
             rel_loss_cls=dict(type='CrossEntropyLoss',
                               use_sigmoid=False,
                               loss_weight=2.0,
-                              class_weight=1.0),
+                              class_weight=1.0,
+                              ),
+            use_relation_weight_loss=False,
             train_cfg=dict(assigner=dict(
                 type='HTriMatcher',
                 s_cls_cost=dict(type='ClassificationCost', weight=1.),
@@ -88,6 +90,19 @@ class PSGTrHead(AnchorFreeHead):
             **kwargs):
 
         super(AnchorFreeHead, self).__init__(init_cfg)
+        self.use_bias = use_bias
+        self.with_statistics = with_statistics
+        self.dataset_config = dataset_config
+        if self.with_statistics:
+            cache_dir = dataset_config['cache']
+            self.statistics = torch.load(cache_dir,
+                                         map_location=torch.device('cpu'))
+            print('\n Statistics loaded!')
+        if self.use_bias:
+            assert self.with_statistics
+            # convey statistics into FrequencyBias to avoid loading again
+            self.freq_bias = FrequencyBias(self.init_cfg, self.statistics)
+        self.use_relation_weight_loss=use_relation_weight_loss
         self.sync_cls_avg_factor = sync_cls_avg_factor
         # NOTE following the official DETR rep0, bg_cls_weight means
         # relative classification weight of the no-object class.
@@ -129,6 +144,8 @@ class PSGTrHead(AnchorFreeHead):
         r_class_weight = torch.ones(num_relations + 1) * r_class_weight
         #NOTE set background class as the first indice for relations as they are 1-based
         r_class_weight[0] = bg_cls_weight
+        if self.use_relation_weight_loss:
+            r_class_weight[1:]= torch.sum(self.statistics['relation_counter'],-1)/self.statistics['relation_counter']
         rel_loss_cls.update({'class_weight': r_class_weight})
         if 'bg_cls_weight' in rel_loss_cls:
             rel_loss_cls.pop('bg_cls_weight')
@@ -187,7 +204,6 @@ class PSGTrHead(AnchorFreeHead):
             self.obj_dice_loss = build_loss(obj_dice_loss)
             # self.sub_focal_loss = build_loss(sub_focal_loss)
             self.sub_dice_loss = build_loss(sub_dice_loss)
-
         self.rel_loss_cls = build_loss(rel_loss_cls)
 
         if self.obj_loss_cls.use_sigmoid:
@@ -219,18 +235,7 @@ class PSGTrHead(AnchorFreeHead):
             f' be exactly 2 times of num_feats. Found {self.embed_dims}' \
             f' and {num_feats}.'
         self._init_layers()
-        self.use_bias=use_bias
-        self.with_statistics=with_statistics
-        self.dataset_config=dataset_config
-        if self.with_statistics:
-            cache_dir = dataset_config['cache']
-            self.statistics = torch.load(cache_dir,
-                                         map_location=torch.device('cpu'))
-            print('\n Statistics loaded!')
-        if self.use_bias:
-            assert self.with_statistics
-            # convey statistics into FrequencyBias to avoid loading again
-            self.freq_bias = FrequencyBias(self.init_cfg, self.statistics)
+
     def _init_layers(self):
         """Initialize layers of the transformer head."""
         self.input_proj = Conv2d(self.in_channels,

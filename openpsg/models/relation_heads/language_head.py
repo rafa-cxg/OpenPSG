@@ -8,6 +8,8 @@ from mmdet.core import bbox_overlaps
 from torch import nn
 from torch.nn import functional as F,init
 
+
+
 class TwoStagePredictor(nn.Module):
     def __init__(self,  cfg,object_classes,num_obj_cls,num_rel_cls):
         super(TwoStagePredictor, self).__init__()
@@ -73,6 +75,8 @@ class TwoStagePredictor(nn.Module):
         obj_boxs,
         rel_pair_idxs,
     ):
+        # sub_boxs=sub_boxs.detach()
+        # obj_boxs=obj_boxs.detach()
         rel_infos = (encode_rel_box_info(image_metas, sub_boxs, obj_boxs, rel_pair_idxs))
         rel_infos=torch.cat(rel_infos,0)
         pos_embed=[]

@@ -14,7 +14,7 @@ from panopticapi.utils import rgb2id
 from openpsg.evaluation import sgg_evaluation
 from openpsg.models.relation_heads.approaches import Result
 from openpsg.datasets.resample.bi_lvl_rsmp import BGNN_Resample
-
+from collections import Counter
 @DATASETS.register_module()
 class PanopticSceneGraphDataset(CocoPanopticDataset):
     def __init__(
@@ -473,7 +473,9 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
             )
 
     def get_statistics(self):
-        freq_matrix = self.get_freq_matrix()
+        freq_matrix,relation_counter = self.get_freq_matrix()
+        relation_counter=sorted(relation_counter.items(), key=lambda x:x[0])#不计'no relation'
+        relation_counter=np.asarray(relation_counter)[:,1]
         eps = 1e-3
         # freq_matrix += eps
         pred_dist = np.log(freq_matrix / freq_matrix.sum(2)[:, :, None] + eps)
@@ -481,6 +483,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
         result = {
             'freq_matrix': torch.from_numpy(freq_matrix),
             'pred_dist': torch.from_numpy(pred_dist).float(),
+            'relation_counter': torch.from_numpy(relation_counter).float(),
         }
         if result['pred_dist'].isnan().any():
             print('check pred_dist: nan')
@@ -497,7 +500,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
             (num_obj_classes+1, num_obj_classes+1),
             dtype=np.float)
         progbar = mmcv.ProgressBar(len(self.data))
-
+        relation_counter=Counter()
         for idx in range(len(self.data)):
             # d=self.data[self.idx_list[idx]] if self.resample else self.data[idx]
             # idx=self.idx_list[idx] if self.resample else idx
@@ -519,6 +522,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
                 subject_index = segments[rel[1]]['category_id']
 
                 relation_index = rel[2]
+                relation_counter[relation_index] += 1
 
                 freq_matrix[object_index, subject_index, relation_index] += 1
 
@@ -533,7 +537,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
             progbar.update()
         bg_matrix += 1
         freq_matrix[:,:,0]=freq_matrix[:,:,0]+bg_matrix
-        return freq_matrix
+        return freq_matrix,relation_counter
 def box_filter(boxes, must_overlap=False):
     """ Only include boxes that overlap as possible relations.
     If no overlapping boxes, use all of them."""

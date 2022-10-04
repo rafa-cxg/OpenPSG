@@ -14,6 +14,7 @@ model = dict(
                    num_classes=80,
                    num_relations=117,
                    in_channels=2048,
+                   use_relation_weight_loss=True,
                    transformer=dict(
                        type='Transformer',
                        encoder=dict(type='DetrTransformerEncoder',
@@ -68,7 +69,8 @@ model = dict(
                    rel_loss_cls=dict(type='CrossEntropyLoss',
                                      use_sigmoid=False,
                                      loss_weight=2.0,
-                                     class_weight=1.0)),
+                                     class_weight=1.0,
+                                    )),
     # training and testing settings
     train_cfg=dict(assigner=dict(
         type='HTriMatcher',

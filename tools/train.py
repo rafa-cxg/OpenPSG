@@ -127,37 +127,37 @@ def main():
         cfg.gpu_ids = range(world_size)
 
     # create work_dir
-    mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
-    # dump config
-    cfg.dump(osp.join(cfg.work_dir, osp.basename(args.config)))
-    # init the logger before other steps
+    # mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
+    # # dump config
+    # cfg.dump(osp.join(cfg.work_dir, osp.basename(args.config)))
+    # # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-    log_file = osp.join(cfg.work_dir, f'{timestamp}.log')
-    logger = get_root_logger(log_file=log_file, log_level=cfg.log_level)
-
-    # init the meta dict to record some important information such as
-    # environment info and seed, which will be logged
+    # log_file = osp.join(cfg.work_dir, f'{timestamp}.log')
+    # logger = get_root_logger(log_file=log_file, log_level=cfg.log_level)
+    #
+    # # init the meta dict to record some important information such as
+    # # environment info and seed, which will be logged
     meta = dict()
-    # log env info
-    env_info_dict = collect_env()
-    env_info = '\n'.join([(f'{k}: {v}') for k, v in env_info_dict.items()])
-    dash_line = '-' * 60 + '\n'
-    logger.info('Environment info:\n' + dash_line + env_info + '\n' +
-                dash_line)
-    meta['env_info'] = env_info
-    meta['config'] = cfg.pretty_text
-    # log some basic info
-    logger.info(f'Distributed training: {distributed}')
-    logger.info(f'Config:\n{cfg.pretty_text}')
-
-    # set random seeds
+    # # log env info
+    # env_info_dict = collect_env()
+    # env_info = '\n'.join([(f'{k}: {v}') for k, v in env_info_dict.items()])
+    # dash_line = '-' * 60 + '\n'
+    # logger.info('Environment info:\n' + dash_line + env_info + '\n' +
+    #             dash_line)
+    # meta['env_info'] = env_info
+    # meta['config'] = cfg.pretty_text
+    # # log some basic info
+    # logger.info(f'Distributed training: {distributed}')
+    # logger.info(f'Config:\n{cfg.pretty_text}')
+    #
+    # # set random seeds
     seed = init_random_seed(args.seed)
-    logger.info(f'Set random seed to {seed}, '
-                f'deterministic: {args.deterministic}')
-    set_random_seed(seed, deterministic=args.deterministic)
+    # logger.info(f'Set random seed to {seed}, '
+    #             f'deterministic: {args.deterministic}')
+    # set_random_seed(seed, deterministic=args.deterministic)
     cfg.seed = seed
     meta['seed'] = seed
-    meta['exp_name'] = osp.basename(args.config)
+    # meta['exp_name'] = osp.basename(args.config)
 
     dataset = build_dataset(cfg.data.train)
 
@@ -172,6 +172,7 @@ def main():
             statistics = {
                 'freq_matrix': result['freq_matrix'],
                 'pred_dist': result['pred_dist'],
+                'relation_counter': result['relation_counter']
             }
             torch.save(statistics, cache_dir)
         print('\n Statistics created!')
