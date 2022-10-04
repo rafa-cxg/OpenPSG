@@ -171,9 +171,12 @@ def obj_edge_vectors(names, wv_dir, wv_type='glove.6B', wv_dim=300):
             vectors[i] = wv_arr[wv_index]
         else:
             # Try the longest word
-            lw_token = sorted(token.split(' '),
+            if ' ' in token:
+                lw_token = sorted(token.split(' '),
                               key=lambda x: len(x),
                               reverse=True)[0]
+            if '-' in token:
+                lw_token = token.split('-')[0]
             print('{} -> {} '.format(token, lw_token))
             wv_index = wv_dict.get(lw_token, None)
             if wv_index is not None:

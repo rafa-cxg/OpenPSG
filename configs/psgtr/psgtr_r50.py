@@ -82,4 +82,5 @@ model = dict(
         o_reg_cost=dict(type='BBoxL1Cost', weight=5.0),
         o_iou_cost=dict(type='IoUCost', iou_mode='giou', weight=2.0),
         r_cls_cost=dict(type='ClassificationCost', weight=2.))),
+
     test_cfg=dict(max_per_img=100))

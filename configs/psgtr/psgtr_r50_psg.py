@@ -196,8 +196,8 @@ evaluation = dict(
     greater_keys='sgdet_score'
 )
 
-data = dict(samples_per_gpu=1,
-            workers_per_gpu=2,
+data = dict(samples_per_gpu=2,
+            workers_per_gpu=0,
             train=dict(pipeline=train_pipeline,
                        resample= dataset_resample),
             val=dict(pipeline=test_pipeline),

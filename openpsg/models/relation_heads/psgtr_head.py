@@ -22,7 +22,7 @@ from mmdet.models.utils import build_transformer
 from packaging import version
 
 from openpsg.models.relation_heads.approaches import FrequencyBias
-
+from ..relation_heads.language_head  import TwoStagePredictor
 if version.parse(torchvision.__version__) < version.parse('0.7'):
     from torchvision.ops import _new_empty_tensor
     from torchvision.ops.misc import _output_size
@@ -173,6 +173,7 @@ class PSGTrHead(AnchorFreeHead):
         self.test_cfg = test_cfg
         self.fp16_enabled = False
         self.swin = swin_backbone
+        self.languagemodel=TwoStagePredictor( train_cfg,self.object_classes,num_classes,num_relations)
 
         self.obj_loss_cls = build_loss(obj_loss_cls)
         self.obj_loss_bbox = build_loss(obj_loss_bbox)
@@ -298,7 +299,7 @@ class PSGTrHead(AnchorFreeHead):
         # construct binary masks which used for the transformer.
         # NOTE following the official DETR repo, non-zero values representing
         # ignored positions, while zero values means valid positions.
-        last_features = feats[
+        last_features = feats[#feats: tuple, feature map
             -1]  ####get feature outputs of intermediate layers
         batch_size = last_features.size(0)
         input_img_h, input_img_w = img_metas[0]['batch_input_shape']
@@ -330,6 +331,13 @@ class PSGTrHead(AnchorFreeHead):
                                                     -1,keepdim=True)),-1).squeeze(1).view(-1,2)#去掉batch dim
             rel_outputs_class = rel_outputs_class + self.freq_bias.index_with_labels(
                 pair_pred.long()).view(outs_dec.shape[0], batch_size, -1, self.num_relations + 1)
+        pair_pred = torch.cat((torch.argmax(sub_outputs_class[-1], -1, keepdim=True), torch.argmax(obj_outputs_class[-1],
+                                                                          -1, keepdim=True)),-1)  # 去掉batch dim
+        sub_boxs=sub_outputs_coord[-1]
+        obj_boxs=obj_outputs_coord[-1]
+        language_rel_score=self.languagemodel(img_metas,sub_boxs,obj_boxs,pair_pred)
+        rel_outputs_class[-1,:,:,:] +=language_rel_score
+        # rel_outputs_class = rel_outputs_class +language_rel_score
         all_cls_scores['rel'] = rel_outputs_class
         if self.use_mask:
             ###########for segmentation#################
