@@ -103,7 +103,7 @@ predicate_classes = [
 
 model = dict(bbox_head=dict(
 dataset_config=dataset_config,
-                   use_bias=True,
+                   use_bias=False,
                    with_statistics=True,
     num_classes=len(object_classes),
     num_relations=len(predicate_classes),
@@ -186,7 +186,7 @@ test_pipeline = [
 ]
 
 evaluation = dict(
-    interval=1,
+    interval=300,
     metric='sgdet',
     relation_mode=True,
     classwise=True,
@@ -199,7 +199,8 @@ evaluation = dict(
 data = dict(samples_per_gpu=1,
             workers_per_gpu=0,
             train=dict(pipeline=train_pipeline,
-                       resample= dataset_resample),
+                       # resample= dataset_resample
+                       ),
             val=dict(pipeline=test_pipeline),
             test=dict(pipeline=test_pipeline))
 # optimizer
@@ -214,12 +215,13 @@ optimizer_config = dict(grad_clip=dict(max_norm=0.1, norm_type=2))
 
 # learning policy
 lr_config = dict(policy='step', step=40)
-runner = dict(type='EpochBasedRunner', max_epochs=60)
+# runner = dict(type='EpochBasedRunner', max_epochs=60)
+runner = dict(type='IterBasedRunner', max_iters=60000)
 
 project_name = 'psgformer'
 expt_name = 'psgtr_r50_psg_0.5_scale_mask'
 work_dir = f'./work_dirs/{expt_name}'
-checkpoint_config = dict(interval=2, max_keep_ckpts=10)
+checkpoint_config = dict(interval=300, max_keep_ckpts=10)
 
 log_config = dict(
     interval=50,

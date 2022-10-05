@@ -337,7 +337,7 @@ class PSGTrHead(AnchorFreeHead):
             rel_outputs_class = rel_outputs_class + self.freq_bias.index_with_labels(
                 pair_pred.long()).view(outs_dec.shape[0], batch_size, -1, self.num_relations + 1)
         pair_pred = torch.cat((torch.argmax(sub_outputs_class[-1], -1, keepdim=True), torch.argmax(obj_outputs_class[-1],
-                                                                          -1, keepdim=True)),-1)  # 去掉batch dim
+                                                                          -1, keepdim=True)),-1)
         sub_boxs=sub_outputs_coord[-1]
         obj_boxs=obj_outputs_coord[-1]
         language_rel_score=self.languagemodel(img_metas,sub_boxs,obj_boxs,pair_pred)

@@ -75,8 +75,8 @@ class TwoStagePredictor(nn.Module):
         obj_boxs,
         rel_pair_idxs,
     ):
-        # sub_boxs=sub_boxs.detach()
-        # obj_boxs=obj_boxs.detach()
+        sub_boxs=sub_boxs.detach()
+        obj_boxs=obj_boxs.detach()
         rel_infos = (encode_rel_box_info(image_metas, sub_boxs, obj_boxs, rel_pair_idxs))
         rel_infos=torch.cat(rel_infos,0)
         pos_embed=[]
