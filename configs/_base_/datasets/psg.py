@@ -75,7 +75,6 @@ data = dict(
         pipeline=train_pipeline,
         split='train',
         all_bboxes=True,
-        # resample= dataset_resample
     ),
     val=dict(
         type=dataset_type,

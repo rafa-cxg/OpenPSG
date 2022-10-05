@@ -1,28 +1,46 @@
 model = dict(
     type='PSGTr',
-    backbone=dict(type='ResNet',
-                  depth=50,
-                  num_stages=4,
-                  out_indices=(0, 1, 2, 3),
-                  frozen_stages=1,
-                  norm_cfg=dict(type='BN', requires_grad=False),
-                  norm_eval=True,
-                  style='pytorch',
-                  init_cfg=dict(type='Pretrained',
-                                checkpoint='torchvision://resnet50')),
+    # backbone=dict(type='ResNet',
+    #               depth=50,
+    #               num_stages=4,
+    #               out_indices=(0, 1, 2, 3),
+    #               frozen_stages=1,
+    #               norm_cfg=dict(type='BN', requires_grad=False),
+    #               norm_eval=True,
+    #               style='pytorch',
+    #               init_cfg=dict(type='Pretrained',
+    #                             checkpoint='torchvision://resnet50')),
+    backbone=dict(
+            type='ResNet',
+            depth=50,
+            num_stages=4,
+            out_indices=(1, 2, 3),                          # 输出第1,2,3层的feature map
+            frozen_stages=1,
+            norm_cfg=dict(type='BN', requires_grad=False),
+            norm_eval=True,
+            style='pytorch',
+            init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
+    neck=dict(
+            type='ChannelMapper',
+            in_channels=[512, 1024, 2048],              # 输入的3层feature map各自的通道数
+            kernel_size=1,
+            out_channels=2048,#256,                           # 将输入特征图的通道数目统一变成256
+            act_cfg=None,
+            norm_cfg=dict(type='GN', num_groups=32),
+            num_outs=4),
     bbox_head=dict(type='PSGTrHead',
                    num_classes=80,
                    num_relations=117,
-                   in_channels=2048,
+                   in_channels=2048,#和neck的out_channels对齐
                    use_relation_weight_loss=True,
                    transformer=dict(
-                       type='Transformer',
+                       type='DeformableDetrTransformer', #  'Transformer',
                        encoder=dict(type='DetrTransformerEncoder',
                                     num_layers=6,
                                     transformerlayers=dict(
                                         type='BaseTransformerLayer',
                                         attn_cfgs=[
-                                            dict(type='MultiheadAttention',
+                                            dict(type= 'MultiScaleDeformableAttention',  #'MultiheadAttention',
                                                  embed_dims=256,
                                                  num_heads=8,
                                                  dropout=0.1)
@@ -32,12 +50,12 @@ model = dict(
                                         operation_order=('self_attn', 'norm',
                                                          'ffn', 'norm'))),
                        decoder=dict(
-                           type='DetrTransformerDecoder',
+                           type= 'DeformableDetrTransformerDecoder' , # 'DetrTransformerDecoder',
                            return_intermediate=True,
                            num_layers=6,
                            transformerlayers=dict(
                                type='DetrTransformerDecoderLayer',
-                               attn_cfgs=dict(type='MultiheadAttention',
+                               attn_cfgs=dict(type= 'MultiScaleDeformableAttention',#'MultiheadAttention',
                                               embed_dims=256,
                                               num_heads=8,
                                               dropout=0.1),
@@ -80,6 +98,8 @@ model = dict(
         o_cls_cost=dict(type='ClassificationCost', weight=1.),
         o_reg_cost=dict(type='BBoxL1Cost', weight=5.0),
         o_iou_cost=dict(type='IoUCost', iou_mode='giou', weight=2.0),
-        r_cls_cost=dict(type='ClassificationCost', weight=2.)),glove_dir='data/glove/'),
+        r_cls_cost=dict(type='ClassificationCost', weight=2.)),
+        glove_dir='data/glove/'
+    ),
 
     test_cfg=dict(max_per_img=100))

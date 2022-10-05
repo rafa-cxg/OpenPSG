@@ -321,7 +321,7 @@ class PSGTrHead(AnchorFreeHead):
         # position encoding
         pos_embed = self.positional_encoding(masks)  # [bs, embed_dim, h, w]
         # outs_dec: [nb_dec, bs, num_query, embed_dim]
-        outs_dec, memory = self.transformer(last_features, masks,
+        outs_dec, memory = self.transformer(feats, masks,
                                             self.query_embed.weight, pos_embed)
 
         sub_outputs_class = self.sub_cls_embed(outs_dec)
@@ -1222,6 +1222,9 @@ class PSGTrHead(AnchorFreeHead):
         # print('-----get_bboxes-----')
         # print(time.time() - forward_time)
         return results_list
+
+
+
 
 
 class MLP(nn.Module):
