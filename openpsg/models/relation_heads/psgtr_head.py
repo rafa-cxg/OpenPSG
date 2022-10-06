@@ -384,7 +384,7 @@ class PSGTrHead(AnchorFreeHead):
         sub_outputs_coords = []
         obj_outputs_classes = []
         obj_outputs_coords = []
-
+        rel_outputs_classes =[]
         for lvl in range(hs.shape[0]):
             if lvl == 0:
                 reference = init_reference
@@ -393,7 +393,7 @@ class PSGTrHead(AnchorFreeHead):
             reference = inverse_sigmoid(reference)
             sub_outputs_class = self.sub_cls_branches[lvl](hs[lvl])
             obj_outputs_class = self.obj_cls_branches[lvl](hs[lvl])
-            rel_outputs_classes = self.rel_cls_embedes[lvl](hs[lvl])
+            rel_outputs_class = self.rel_cls_embedes[lvl](hs[lvl])
             sub_tmp = self.sub_reg_branches[lvl](hs[lvl])#(bs,n,4)
             obj_tmp = self.obj_reg_branches[lvl](hs[lvl])
             if reference.shape[-1] == 4:
@@ -409,12 +409,13 @@ class PSGTrHead(AnchorFreeHead):
             sub_outputs_coords.append(sub_outputs_coord)
             obj_outputs_classes.append(obj_outputs_class)
             obj_outputs_coords.append(obj_outputs_coord)
-            rel_outputs_classes
+            rel_outputs_classes.append(rel_outputs_class)
 
         sub_outputs_classes = torch.stack(sub_outputs_classes)
         sub_outputs_coords = torch.stack(sub_outputs_coords)
         obj_outputs_classes = torch.stack(obj_outputs_classes)
         obj_outputs_coords = torch.stack(obj_outputs_coords)
+        rel_outputs_classes = torch.stack(rel_outputs_classes)
 
 
         # sub_outputs_class = self.sub_cls_embed(outs_dec)
@@ -439,7 +440,7 @@ class PSGTrHead(AnchorFreeHead):
         # language_rel_score=self.languagemodel(img_metas,sub_boxs,obj_boxs,pair_pred)
         # rel_outputs_class[-1,:,:,:] +=language_rel_score
         # rel_outputs_class = rel_outputs_class +language_rel_score
-        all_cls_scores['rel'] = torch.stack([rel_outputs_classes for _ in range(hs.shape[0])],0)
+        all_cls_scores['rel'] = rel_outputs_classes # torch.stack([rel_outputs_classes for _ in range(hs.shape[0])],0)
         if self.use_mask:
             ###########for segmentation#################
             # for lvl in range(hs.shape[0]):
