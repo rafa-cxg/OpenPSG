@@ -439,7 +439,7 @@ class PSGTrHead(AnchorFreeHead):
         # language_rel_score=self.languagemodel(img_metas,sub_boxs,obj_boxs,pair_pred)
         # rel_outputs_class[-1,:,:,:] +=language_rel_score
         # rel_outputs_class = rel_outputs_class +language_rel_score
-        all_cls_scores['rel'] = rel_outputs_classes
+        all_cls_scores['rel'] = torch.stack([rel_outputs_classes for _ in range(hs.shape[0])],0)
         if self.use_mask:
             ###########for segmentation#################
             # for lvl in range(hs.shape[0]):
@@ -513,7 +513,7 @@ class PSGTrHead(AnchorFreeHead):
         img_metas_list = [img_metas for _ in range(num_dec_layers)]
 
         all_r_cls_scores = [None for _ in range(num_dec_layers)]
-        all_r_cls_scores = [all_cls_scores['rel'] for _ in range(num_dec_layers)]
+        all_r_cls_scores = all_cls_scores['rel']
 
         if self.use_mask:
             # s_losses_cls, o_losses_cls, r_losses_cls, s_losses_bbox, o_losses_bbox, s_losses_iou, o_losses_iou, s_focal_losses, s_dice_losses, o_focal_losses, o_dice_losses = multi_apply(
