@@ -18,6 +18,7 @@ from mmdet.datasets.coco_panoptic import INSTANCE_OFFSET
 from mmdet.models.builder import HEADS, build_loss
 from mmdet.models.dense_heads import AnchorFreeHead
 from mmdet.models.utils import build_transformer
+from mmdet.models.utils.transformer import inverse_sigmoid
 #####imports for tools
 from packaging import version
 
@@ -190,7 +191,7 @@ class PSGTrHead(AnchorFreeHead):
         self.test_cfg = test_cfg
         self.fp16_enabled = False
         self.swin = swin_backbone
-        self.languagemodel=TwoStagePredictor( train_cfg,self.object_classes,num_classes,num_relations)
+        # self.languagemodel=TwoStagePredictor( train_cfg,self.object_classes,num_classes,num_relations)
 
         self.obj_loss_cls = build_loss(obj_loss_cls)
         self.obj_loss_bbox = build_loss(obj_loss_bbox)
@@ -237,17 +238,51 @@ class PSGTrHead(AnchorFreeHead):
         self._init_layers()
 
     def _init_layers(self):
+        sub_fc_cls = Linear(self.embed_dims, self.sub_cls_out_channels)
+        obj_fc_cls = Linear(self.embed_dims, self.sub_cls_out_channels)
+        sub_reg_branch = []
+        obj_reg_branch = []
+        for _ in range(self.num_reg_fcs):
+            sub_reg_branch.append(Linear(self.embed_dims, self.embed_dims))
+            obj_reg_branch.append(Linear(self.embed_dims, self.embed_dims))
+            sub_reg_branch.append(nn.ReLU())
+            obj_reg_branch.append(nn.ReLU())
+        sub_reg_branch.append(Linear(self.embed_dims, 4))
+        # sub_reg_branch.append(nn.Sigmoid())
+        obj_reg_branch.append(Linear(self.embed_dims, 4))
+        # obj_reg_branch.append(nn.Sigmoid())
+        sub_reg_branch = nn.Sequential(*sub_reg_branch)
+        obj_reg_branch = nn.Sequential(*obj_reg_branch)
+        # last reg_branch is used to generate proposal from
+        # encode feature map when as_two_stage is True.
+        num_pred = self.transformer.decoder.num_layers
+
+        self.sub_cls_branches = nn.ModuleList(
+            [sub_fc_cls for _ in range(num_pred)])
+        self.sub_reg_branches = nn.ModuleList(
+            [sub_reg_branch for _ in range(num_pred)])
+        self.obj_cls_branches = nn.ModuleList(
+            [obj_fc_cls for _ in range(num_pred)])
+        self.obj_reg_branches = nn.ModuleList(
+            [obj_reg_branch for _ in range(num_pred)])
+        rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)#不能加self!
+        self.rel_cls_embedes = nn.ModuleList(
+            [rel_cls_embed for _ in range(num_pred)])#todo 模型不能self的套self,不然就 optimier group报错
+        self.query_embed = nn.Embedding(self.num_query,
+                                                self.embed_dims * 2)
         """Initialize layers of the transformer head."""
         self.input_proj = Conv2d(self.in_channels,
                                  self.embed_dims,
                                  kernel_size=1)
-        self.query_embed = nn.Embedding(self.num_query, self.embed_dims)
+        # # self.query_embed = nn.Embedding(self.num_query, self.embed_dims)
+        #
 
-        self.obj_cls_embed = Linear(self.embed_dims, self.obj_cls_out_channels)
-        self.obj_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
-        self.sub_cls_embed = Linear(self.embed_dims, self.sub_cls_out_channels)
-        self.sub_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
-        self.rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)
+        #
+        # self.obj_cls_embed = Linear(self.embed_dims, self.obj_cls_out_channels)
+        # self.obj_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
+        # self.sub_cls_embed = Linear(self.embed_dims, self.sub_cls_out_channels)
+        # self.sub_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
+        # self.rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)
 
         if self.use_mask:
             self.sub_bbox_attention = MHAttentionMap(self.embed_dims,
@@ -260,10 +295,10 @@ class PSGTrHead(AnchorFreeHead):
                                                      dropout=0.0)
             if not self.swin:
                 self.sub_mask_head = MaskHeadSmallConv(
-                    self.embed_dims + self.n_heads, [1024, 512, 256],
+                    self.embed_dims + self.n_heads, [256, 256, 256],#todo 由于neck存在，所有层的feature map都是256[1024, 512, 256]
                     self.embed_dims)
                 self.obj_mask_head = MaskHeadSmallConv(
-                    self.embed_dims + self.n_heads, [1024, 512, 256],
+                    self.embed_dims + self.n_heads, [256, 256, 256],#todo 由于neck存在，所有层的feature map都是256[1024, 512, 256]
                     self.embed_dims)
             elif self.swin:
                 self.sub_mask_head = MaskHeadSmallConv(
@@ -276,29 +311,29 @@ class PSGTrHead(AnchorFreeHead):
         # The initialization for transformer is important
         self.transformer.init_weights()
 
-    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
-                              missing_keys, unexpected_keys, error_msgs):
-        """load checkpoints."""
-        version = local_metadata.get('version', None)
-        if (version is None or version < 2):
-            convert_dict = {
-                '.self_attn.': '.attentions.0.',
-                '.ffn.': '.ffns.0.',
-                '.multihead_attn.': '.attentions.1.',
-                '.decoder.norm.': '.decoder.post_norm.',
-                '.query_embedding.': '.query_embed.'
-            }
-            state_dict_keys = list(state_dict.keys())
-            for k in state_dict_keys:
-                for ori_key, convert_key in convert_dict.items():
-                    if ori_key in k:
-                        convert_key = k.replace(ori_key, convert_key)
-                        state_dict[convert_key] = state_dict[k]
-                        del state_dict[k]
-        super(AnchorFreeHead,
-              self)._load_from_state_dict(state_dict, prefix, local_metadata,
-                                          strict, missing_keys,
-                                          unexpected_keys, error_msgs)
+    # def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+    #                           missing_keys, unexpected_keys, error_msgs):
+    #     """load checkpoints."""
+    #     version = local_metadata.get('version', None)
+    #     if (version is None or version < 2):
+    #         convert_dict = {
+    #             '.self_attn.': '.attentions.0.',
+    #             '.ffn.': '.ffns.0.',
+    #             '.multihead_attn.': '.attentions.1.',
+    #             '.decoder.norm.': '.decoder.post_norm.',
+    #             '.query_embedding.': '.query_embed.'
+    #         }
+    #         state_dict_keys = list(state_dict.keys())
+    #         for k in state_dict_keys:
+    #             for ori_key, convert_key in convert_dict.items():
+    #                 if ori_key in k:
+    #                     convert_key = k.replace(ori_key, convert_key)
+    #                     state_dict[convert_key] = state_dict[k]
+    #                     del state_dict[k]
+    #     super(AnchorFreeHead,
+    #           self)._load_from_state_dict(state_dict, prefix, local_metadata,
+    #                                       strict, missing_keys,
+    #                                       unexpected_keys, error_msgs)
 
     def forward(self, feats, img_metas):
         # construct binary masks which used for the transformer.
@@ -306,52 +341,114 @@ class PSGTrHead(AnchorFreeHead):
         # ignored positions, while zero values means valid positions.
         last_features = feats[#feats: tuple, feature map
             -1]  ####get feature outputs of intermediate layers
-        batch_size = last_features.size(0)
+        # batch_size = last_features.size(0)
+        # input_img_h, input_img_w = img_metas[0]['batch_input_shape']
+        # masks = last_features.new_ones((batch_size, input_img_h, input_img_w))
+        # for img_id in range(batch_size):
+        #     img_h, img_w, _ = img_metas[img_id]['img_shape']
+        #     masks[img_id, :img_h, :img_w] = 0
+        #
+        last_features = self.input_proj(last_features)
+        # # interpolate masks to have the same spatial shape with feats
+        # masks = F.interpolate(masks.unsqueeze(1),
+        #                       size=last_features.shape[-2:]).to(
+        #                           torch.bool).squeeze(1)
+        # # position encoding
+        # pos_embed = self.positional_encoding(masks)  # [bs, embed_dim, h, w]
+        # # outs_dec: [nb_dec, bs, num_query, embed_dim]
+        # outs_dec, memory = self.transformer(feats, masks,
+        #                                     self.query_embed.weight, pos_embed)
+        batch_size = feats[0].size(0)
         input_img_h, input_img_w = img_metas[0]['batch_input_shape']
-        masks = last_features.new_ones((batch_size, input_img_h, input_img_w))
+        img_masks = feats[0].new_ones(
+            (batch_size, input_img_h, input_img_w))
         for img_id in range(batch_size):
             img_h, img_w, _ = img_metas[img_id]['img_shape']
-            masks[img_id, :img_h, :img_w] = 0
+            img_masks[img_id, :img_h, :img_w] = 0
 
-        last_features = self.input_proj(last_features)
-        # interpolate masks to have the same spatial shape with feats
-        masks = F.interpolate(masks.unsqueeze(1),
-                              size=last_features.shape[-2:]).to(
-                                  torch.bool).squeeze(1)
-        # position encoding
-        pos_embed = self.positional_encoding(masks)  # [bs, embed_dim, h, w]
+        mlvl_masks = []
+        mlvl_positional_encodings = []
+        for feat in feats:
+            mlvl_masks.append(
+                F.interpolate(img_masks[None],
+                              size=feat.shape[-2:]).to(torch.bool).squeeze(0))
+            mlvl_positional_encodings.append(
+                self.positional_encoding(mlvl_masks[-1]))
+
         # outs_dec: [nb_dec, bs, num_query, embed_dim]
-        outs_dec, memory = self.transformer(feats, masks,
-                                            self.query_embed.weight, pos_embed)
+        hs, init_reference, inter_references , memory, enc_outputs_class, enc_outputs_coord = self.transformer(feats, mlvl_masks,
+                                            self.query_embed.weight, mlvl_positional_encodings)#outs_dec, memory
 
-        sub_outputs_class = self.sub_cls_embed(outs_dec)
-        sub_outputs_coord = self.sub_box_embed(outs_dec).sigmoid()
-        obj_outputs_class = self.obj_cls_embed(outs_dec)
-        obj_outputs_coord = self.obj_box_embed(outs_dec).sigmoid()
+        hs = hs.permute(0, 2, 1, 3)
+        sub_outputs_classes = []
+        sub_outputs_coords = []
+        obj_outputs_classes = []
+        obj_outputs_coords = []
 
-        all_cls_scores = dict(sub=sub_outputs_class, obj=obj_outputs_class)
-        rel_outputs_class = self.rel_cls_embed(outs_dec)
+        for lvl in range(hs.shape[0]):
+            if lvl == 0:
+                reference = init_reference
+            else:
+                reference = inter_references[lvl - 1]
+            reference = inverse_sigmoid(reference)
+            sub_outputs_class = self.sub_cls_branches[lvl](hs[lvl])
+            obj_outputs_class = self.obj_cls_branches[lvl](hs[lvl])
+            rel_outputs_classes = self.rel_cls_embedes[lvl](hs[lvl])
+            sub_tmp = self.sub_reg_branches[lvl](hs[lvl])#(bs,n,4)
+            obj_tmp = self.obj_reg_branches[lvl](hs[lvl])
+            if reference.shape[-1] == 4:
+                sub_tmp += reference
+                obj_tmp += reference
+            else:
+                assert reference.shape[-1] == 2
+                sub_tmp[..., :2] += reference
+                obj_tmp[..., :2] += reference
+            sub_outputs_coord = sub_tmp.sigmoid()
+            obj_outputs_coord = obj_tmp.sigmoid()
+            sub_outputs_classes.append(sub_outputs_class)
+            sub_outputs_coords.append(sub_outputs_coord)
+            obj_outputs_classes.append(obj_outputs_class)
+            obj_outputs_coords.append(obj_outputs_coord)
+            rel_outputs_classes
+
+        sub_outputs_classes = torch.stack(sub_outputs_classes)
+        sub_outputs_coords = torch.stack(sub_outputs_coords)
+        obj_outputs_classes = torch.stack(obj_outputs_classes)
+        obj_outputs_coords = torch.stack(obj_outputs_coords)
+
+
+        # sub_outputs_class = self.sub_cls_embed(outs_dec)
+        # sub_outputs_coord = self.sub_box_embed(outs_dec).sigmoid()
+        # obj_outputs_class = self.obj_cls_embed(outs_dec)
+        # obj_outputs_coord = self.obj_box_embed(outs_dec).sigmoid()
+        all_cls_scores = dict(sub=sub_outputs_classes, obj=obj_outputs_classes)
+
+        # rel_outputs_class = self.rel_cls_embed(outs_dec)
+        # all_cls_scores = dict(sub=sub_outputs_class, obj=obj_outputs_class)
+        # rel_outputs_class = self.rel_cls_embed(outs_dec)
         if self.use_bias:#default false
             pair_pred=torch.cat((torch.argmax(sub_outputs_class,-1,keepdim=True),torch.argmax(obj_outputs_class,
                                                     -1,keepdim=True)),-1).squeeze(1).view(-1,2)#去掉batch dim
             rel_outputs_class = rel_outputs_class + self.freq_bias.index_with_labels(
                 pair_pred.long()).view(outs_dec.shape[0], batch_size, -1, self.num_relations + 1)
-        pair_pred = torch.cat((torch.argmax(sub_outputs_class[-1], -1, keepdim=True), torch.argmax(obj_outputs_class[-1],
-                                                                          -1, keepdim=True)),-1)
-        sub_boxs=sub_outputs_coord[-1]
-        obj_boxs=obj_outputs_coord[-1]
-        language_rel_score=self.languagemodel(img_metas,sub_boxs,obj_boxs,pair_pred)
-        rel_outputs_class[-1,:,:,:] +=language_rel_score
+
+        # pair_pred = torch.cat((torch.argmax(sub_outputs_class[-1], -1, keepdim=True), torch.argmax(obj_outputs_class[-1],
+        #                                                                   -1, keepdim=True)),-1)
+        # sub_boxs=sub_outputs_coord[-1]
+        # obj_boxs=obj_outputs_coord[-1]
+        # language_rel_score=self.languagemodel(img_metas,sub_boxs,obj_boxs,pair_pred)
+        # rel_outputs_class[-1,:,:,:] +=language_rel_score
         # rel_outputs_class = rel_outputs_class +language_rel_score
-        all_cls_scores['rel'] = rel_outputs_class
+        all_cls_scores['rel'] = rel_outputs_classes
         if self.use_mask:
             ###########for segmentation#################
-            sub_bbox_mask = self.sub_bbox_attention(outs_dec[-1],
+            # for lvl in range(hs.shape[0]):
+            sub_bbox_mask = self.sub_bbox_attention(hs[-1],
                                                     memory,
-                                                    mask=masks)
-            obj_bbox_mask = self.obj_bbox_attention(outs_dec[-1],
+                                                    mask=mlvl_masks[-1])
+            obj_bbox_mask = self.obj_bbox_attention(hs[-1],
                                                     memory,
-                                                    mask=masks)
+                                                    mask=mlvl_masks[-1])
             sub_seg_masks = self.sub_mask_head(last_features, sub_bbox_mask,
                                                [feats[2], feats[1], feats[0]])
             outputs_sub_seg_masks = sub_seg_masks.view(batch_size,
@@ -365,12 +462,12 @@ class PSGTrHead(AnchorFreeHead):
                                                        obj_seg_masks.shape[-2],
                                                        obj_seg_masks.shape[-1])
 
-            all_bbox_preds = dict(sub=sub_outputs_coord,
-                                  obj=obj_outputs_coord,
+            all_bbox_preds = dict(sub=sub_outputs_coords,
+                                  obj=obj_outputs_coords,
                                   sub_seg=outputs_sub_seg_masks,
                                   obj_seg=outputs_obj_seg_masks)
         else:
-            all_bbox_preds = dict(sub=sub_outputs_coord, obj=obj_outputs_coord)
+            all_bbox_preds = dict(sub=sub_outputs_coords, obj=obj_outputs_coords)
         return all_cls_scores, all_bbox_preds
 
     @force_fp32(apply_to=('all_cls_scores_list', 'all_bbox_preds_list'))
@@ -416,7 +513,7 @@ class PSGTrHead(AnchorFreeHead):
         img_metas_list = [img_metas for _ in range(num_dec_layers)]
 
         all_r_cls_scores = [None for _ in range(num_dec_layers)]
-        all_r_cls_scores = all_cls_scores['rel']
+        all_r_cls_scores = [all_cls_scores['rel'] for _ in range(num_dec_layers)]
 
         if self.use_mask:
             # s_losses_cls, o_losses_cls, r_losses_cls, s_losses_bbox, o_losses_bbox, s_losses_iou, o_losses_iou, s_focal_losses, s_dice_losses, o_focal_losses, o_dice_losses = multi_apply(

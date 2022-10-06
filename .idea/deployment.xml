@@ -6,6 +6,7 @@
         <serverdata>
           <mappings>
             <mapping deploy="/PSG" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/mmdetection" local="$PROJECT_DIR$/../mmdetection-master" />
           </mappings>
         </serverdata>
       </paths>

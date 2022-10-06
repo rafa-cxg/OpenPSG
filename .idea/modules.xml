@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/OpenPSG-main.iml" filepath="$PROJECT_DIR$/.idea/OpenPSG-main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../mmdetection-master/.idea/mmdetection-master.iml" filepath="$PROJECT_DIR$/../mmdetection-master/.idea/mmdetection-master.iml" />
     </modules>
   </component>
 </project>

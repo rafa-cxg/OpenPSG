@@ -24,14 +24,14 @@ model = dict(
             type='ChannelMapper',
             in_channels=[512, 1024, 2048],              # 输入的3层feature map各自的通道数
             kernel_size=1,
-            out_channels=2048,#256,                           # 将输入特征图的通道数目统一变成256
+            out_channels=256,#256,                           # 将输入特征图的通道数目统一变成256
             act_cfg=None,
             norm_cfg=dict(type='GN', num_groups=32),
             num_outs=4),
     bbox_head=dict(type='PSGTrHead',
                    num_classes=80,
                    num_relations=117,
-                   in_channels=2048,#和neck的out_channels对齐
+                   in_channels=256,#和neck的out_channels对齐
                    use_relation_weight_loss=True,
                    transformer=dict(
                        type='DeformableDetrTransformer', #  'Transformer',
@@ -55,10 +55,15 @@ model = dict(
                            num_layers=6,
                            transformerlayers=dict(
                                type='DetrTransformerDecoderLayer',
-                               attn_cfgs=dict(type= 'MultiScaleDeformableAttention',#'MultiheadAttention',
+                               attn_cfgs=[dict(
+                                    type='MultiheadAttention',      # 第一个attention的类型
+                                    embed_dims=256,
+                                    num_heads=8,                    # 头数
+                                    dropout=0.1),
+                                   dict(type= 'MultiScaleDeformableAttention',#'MultiheadAttention',
                                               embed_dims=256,
                                               num_heads=8,
-                                              dropout=0.1),
+                                              dropout=0.1)],
                                feedforward_channels=2048,
                                ffn_dropout=0.1,
                                operation_order=('self_attn', 'norm',
@@ -66,7 +71,7 @@ model = dict(
                                                 'norm')),
                        )),
                    positional_encoding=dict(type='SinePositionalEncoding',
-                                            num_feats=128,
+                                            num_feats=128, #128,
                                             normalize=True),
                    sub_loss_cls=dict(type='CrossEntropyLoss',
                                      use_sigmoid=False,
