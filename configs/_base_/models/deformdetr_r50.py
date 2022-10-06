@@ -32,7 +32,7 @@ model = dict(
                    num_classes=80,
                    num_relations=117,
                    in_channels=256,#和neck的out_channels对齐
-                   use_relation_weight_loss=True,
+                   use_relation_weight_loss=False,
                    transformer=dict(
                        type='DeformableDetrTransformer', #  'Transformer',
                        encoder=dict(type='DetrTransformerEncoder',

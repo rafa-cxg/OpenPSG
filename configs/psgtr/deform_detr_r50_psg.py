@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/psgtr_r50.py', '../_base_/datasets/psg.py',
+    '../_base_/models/deformdetr_r50.py', '../_base_/datasets/psg.py',
     '../_base_/custom_runtime.py'
 ]
 
@@ -185,16 +185,7 @@ test_pipeline = [
         ])
 ]
 
-evaluation = dict(
-    interval=300,
-    metric='sgdet',
-    relation_mode=True,
-    classwise=True,
-    iou_thrs=0.5,
-    detection_method='pan_seg',
-    save_best='sgdet_score',
-    greater_keys='sgdet_score'
-)
+
 
 data = dict(samples_per_gpu=1,
             workers_per_gpu=0,
@@ -214,14 +205,14 @@ optimizer = dict(
 optimizer_config = dict(grad_clip=dict(max_norm=0.1, norm_type=2))
 
 # learning policy
-lr_config = dict(policy='step', step=40)
+lr_config = dict(policy='step', step=600)
 # runner = dict(type='EpochBasedRunner', max_epochs=60)
 runner = dict(type='IterBasedRunner', max_iters=60000)
 
 project_name = 'psgformer'
 expt_name = 'psgtr_r50_psg_0.5_scale_mask'
 work_dir = f'./work_dirs/{expt_name}'
-checkpoint_config = dict(interval=300, max_keep_ckpts=10)
+
 
 log_config = dict(
     interval=50,

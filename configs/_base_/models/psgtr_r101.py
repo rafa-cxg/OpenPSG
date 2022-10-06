@@ -1,4 +1,4 @@
-_base_ = './psgtr_r50.py'
+_base_ = './deformdetr_r50.py'
 
 model = dict(backbone=dict(
     depth=101,

@@ -1,5 +1,5 @@
 _base_ = [
-    './psgtr_r50_psg.py'
+    './deform_detr_r50_psg.py'
 ]
 
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53],
