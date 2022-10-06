@@ -14,7 +14,7 @@ model = dict(
                    num_classes=80,
                    num_relations=117,
                    in_channels=2048,
-                   use_relation_weight_loss=True,
+                   use_relation_weight_loss=False,
                    transformer=dict(
                        type='Transformer',
                        encoder=dict(type='DetrTransformerEncoder',

@@ -352,7 +352,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
     def prepare_test_img(self, idx):
         # For SGG, since the forward process may need gt_bboxes/gt_labels,
         # we should also load annotation as if in the training mode.
-        return self.prepare_train_img(idx)
+        return super(PanopticSceneGraphDataset, self).prepare_test_img(idx)
 
     def prepare_train_img(self,idx):
         if self.resample:
