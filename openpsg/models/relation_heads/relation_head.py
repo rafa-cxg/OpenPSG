@@ -28,7 +28,6 @@ class RelationHead(BaseModule):
         relation_ranker=None,
         dataset_config=None,
         use_bias=False,
-        use_statistics=False,
         num_classes=151,
         num_predicates=51,
         loss_object=dict(type='CrossEntropyLoss',
@@ -105,7 +104,7 @@ class RelationHead(BaseModule):
         if loss_relation is not None:
             self.loss_relation = builder.build_loss(loss_relation)
 
-        if use_statistics:
+        if self.with_statistics:
             cache_dir = dataset_config['cache']
             self.statistics = torch.load(cache_dir,
                                          map_location=torch.device('cpu'))

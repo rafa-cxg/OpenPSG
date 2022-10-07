@@ -104,7 +104,7 @@ predicate_classes = [
 model = dict(bbox_head=dict(
 dataset_config=dataset_config,
                    use_bias=False,
-                   with_statistics=True,
+                   with_statistics=False,
     num_classes=len(object_classes),
     num_relations=len(predicate_classes),
     object_classes=object_classes,
@@ -199,7 +199,7 @@ evaluation = dict(
 data = dict(samples_per_gpu=1,
             workers_per_gpu=0,
             train=dict(pipeline=train_pipeline,
-                       # resample= dataset_resample
+                       resample= dataset_resample
                        ),
             val=dict(pipeline=test_pipeline),
             test=dict(pipeline=test_pipeline))

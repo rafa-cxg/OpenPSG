@@ -102,7 +102,8 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
             ]
             # self.data = self.data[:100] # for quick debug
         #---------------resample-------------#
-        if self.resample!= None:
+        if self.resample!= None and   split == 'train':
+
             self.repeat_dict=self.resample.resampling_dict_generation(self.data,dataset['predicate_classes'])
             duplicate_idx_list = []
             for idx in range(len(self.data)):  # 50000+?
@@ -141,8 +142,11 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
         if not self.test_mode:
             self._set_group_flag()
     def __len__(self):
-        if self.resample:
+        if self.resample and  self.split == 'train':
+            print('The dataset has {} images.'.format(len(self.idx_list)))
+
             return len(self.idx_list)
+        print('The dataset has {} images.'.format(len(self.data_infos)))
 
         return len(self.data_infos)
     def __getitem__(self, idx):
@@ -172,7 +176,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
         """
         self.flag = np.zeros(len(self), dtype=np.uint8)
         for i in range(len(self)):
-            if self.resample:
+            if self.resample and  self.split == 'train':
                 idx = self.idx_list[i]
                 img_info = self.data_infos[idx]
 
@@ -501,7 +505,7 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
             dtype=np.float)
         progbar = mmcv.ProgressBar(len(self.data))
         relation_counter=Counter()
-        for idx in range(len(self.data)):
+        for idx in range(len(self.data)):#不受resample的影响
             # d=self.data[self.idx_list[idx]] if self.resample else self.data[idx]
             # idx=self.idx_list[idx] if self.resample else idx
             d=self.data[idx]
