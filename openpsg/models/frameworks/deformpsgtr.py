@@ -71,15 +71,16 @@ def triplet2Result(triplets, use_mask, eval_pan_rels=True):
 
 
 @DETECTORS.register_module()
-class PSGTr(SingleStageDetector):
+class DEFORMPSGTr(SingleStageDetector):
     def __init__(self,
                  backbone,
+                 neck,
                  bbox_head,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
                  init_cfg=None):
-        super(PSGTr, self).__init__(backbone, None, bbox_head, train_cfg,
+        super(DEFORMPSGTr, self).__init__(backbone, neck,bbox_head, train_cfg,
                                     test_cfg, pretrained, init_cfg)
         self.CLASSES = self.bbox_head.object_classes
         self.PREDICATES = self.bbox_head.predicate_classes
@@ -89,6 +90,7 @@ class PSGTr(SingleStageDetector):
     # the forward of bbox_head requires img_metas
     def forward_dummy(self, img):
         """Used for computing network flops.
+
         See `mmdetection/tools/analysis_tools/get_flops.py`
         """
         warnings.warn('Warning! MultiheadAttention in DETR does not '
@@ -146,4 +148,4 @@ class PSGTr(SingleStageDetector):
             for triplets in results_list
         ]
         # print(time.time() - s)
-        return
+        return sg_results

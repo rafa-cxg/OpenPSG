@@ -1,5 +1,5 @@
 model = dict(
-    type='PSGTr',
+    type='DEFORMPSGTr',
     # backbone=dict(type='ResNet',
     #               depth=50,
     #               num_stages=4,
@@ -28,7 +28,7 @@ model = dict(
             act_cfg=None,
             norm_cfg=dict(type='GN', num_groups=32),
             num_outs=4),
-    bbox_head=dict(type='PSGTrHead',
+    bbox_head=dict(type='DEFORMPSGTrHead',
                    num_classes=80,
                    num_relations=117,
                    in_channels=256,#和neck的out_channels对齐

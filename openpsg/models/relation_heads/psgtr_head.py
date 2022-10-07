@@ -31,7 +31,6 @@ if version.parse(torchvision.__version__) < version.parse('0.7'):
 
 @HEADS.register_module()
 class PSGTrHead(AnchorFreeHead):
-
     _version = 2
 
     def __init__(
@@ -103,57 +102,58 @@ class PSGTrHead(AnchorFreeHead):
             assert self.with_statistics
             # convey statistics into FrequencyBias to avoid loading again
             self.freq_bias = FrequencyBias(self.init_cfg, self.statistics)
-        self.use_relation_weight_loss=use_relation_weight_loss
+        self.use_relation_weight_loss = use_relation_weight_loss
         self.sync_cls_avg_factor = sync_cls_avg_factor
         # NOTE following the official DETR rep0, bg_cls_weight means
         # relative classification weight of the no-object class.
         assert isinstance(bg_cls_weight, float), 'Expected ' \
-            'bg_cls_weight to have type float. Found ' \
-            f'{type(bg_cls_weight)}.'
+                                                 'bg_cls_weight to have type float. Found ' \
+                                                 f'{type(bg_cls_weight)}.'
         self.bg_cls_weight = bg_cls_weight
 
         assert isinstance(use_mask, bool), 'Expected ' \
-            'use_mask to have type bool. Found ' \
-            f'{type(use_mask)}.'
+                                           'use_mask to have type bool. Found ' \
+                                           f'{type(use_mask)}.'
         self.use_mask = use_mask
 
         s_class_weight = sub_loss_cls.get('class_weight', None)
         assert isinstance(s_class_weight, float), 'Expected ' \
-            'class_weight to have type float. Found ' \
-            f'{type(s_class_weight)}.'
+                                                  'class_weight to have type float. Found ' \
+                                                  f'{type(s_class_weight)}.'
 
         s_class_weight = torch.ones(num_classes + 1) * s_class_weight
-        #NOTE set background class as the last indice
+        # NOTE set background class as the last indice
         s_class_weight[-1] = bg_cls_weight
         sub_loss_cls.update({'class_weight': s_class_weight})
 
         o_class_weight = obj_loss_cls.get('class_weight', None)
         assert isinstance(o_class_weight, float), 'Expected ' \
-            'class_weight to have type float. Found ' \
-            f'{type(o_class_weight)}.'
+                                                  'class_weight to have type float. Found ' \
+                                                  f'{type(o_class_weight)}.'
 
         o_class_weight = torch.ones(num_classes + 1) * o_class_weight
-        #NOTE set background class as the last indice
+        # NOTE set background class as the last indice
         o_class_weight[-1] = bg_cls_weight
         obj_loss_cls.update({'class_weight': o_class_weight})
 
         r_class_weight = rel_loss_cls.get('class_weight', None)
         assert isinstance(r_class_weight, float), 'Expected ' \
-            'class_weight to have type float. Found ' \
-            f'{type(r_class_weight)}.'
+                                                  'class_weight to have type float. Found ' \
+                                                  f'{type(r_class_weight)}.'
 
         r_class_weight = torch.ones(num_relations + 1) * r_class_weight
-        #NOTE set background class as the first indice for relations as they are 1-based
+        # NOTE set background class as the first indice for relations as they are 1-based
         r_class_weight[0] = bg_cls_weight
         if self.use_relation_weight_loss:
-            r_class_weight[1:]= torch.sum(self.statistics['relation_counter'],-1)/self.statistics['relation_counter']
+            r_class_weight[1:] = torch.sum(self.statistics['relation_counter'], -1) / self.statistics[
+                'relation_counter']
         rel_loss_cls.update({'class_weight': r_class_weight})
         if 'bg_cls_weight' in rel_loss_cls:
             rel_loss_cls.pop('bg_cls_weight')
 
         if train_cfg:
-            assert 'assigner' in train_cfg, 'assigner should be provided '\
-                'when train_cfg is set.'
+            assert 'assigner' in train_cfg, 'assigner should be provided ' \
+                                            'when train_cfg is set.'
             assigner = train_cfg['assigner']
             assert sub_loss_cls['loss_weight'] == assigner['s_cls_cost']['weight'], \
                 'The classification weight for loss and matcher should be' \
@@ -166,10 +166,10 @@ class PSGTrHead(AnchorFreeHead):
                 'exactly the same.'
             assert sub_loss_bbox['loss_weight'] == assigner['s_reg_cost'][
                 'weight'], 'The regression L1 weight for loss and matcher ' \
-                'should be exactly the same.'
+                           'should be exactly the same.'
             assert obj_loss_bbox['loss_weight'] == assigner['o_reg_cost'][
                 'weight'], 'The regression L1 weight for loss and matcher ' \
-                'should be exactly the same.'
+                           'should be exactly the same.'
             assert sub_loss_iou['loss_weight'] == assigner['s_iou_cost']['weight'], \
                 'The regression iou weight for loss and matcher should be' \
                 'exactly the same.'
@@ -191,7 +191,7 @@ class PSGTrHead(AnchorFreeHead):
         self.test_cfg = test_cfg
         self.fp16_enabled = False
         self.swin = swin_backbone
-        # self.languagemodel=TwoStagePredictor( train_cfg,self.object_classes,num_classes,num_relations)
+        self.languagemodel = TwoStagePredictor(train_cfg, self.object_classes, num_classes, num_relations)
 
         self.obj_loss_cls = build_loss(obj_loss_cls)
         self.obj_loss_bbox = build_loss(obj_loss_bbox)
@@ -233,56 +233,22 @@ class PSGTrHead(AnchorFreeHead):
         assert 'num_feats' in positional_encoding
         num_feats = positional_encoding['num_feats']
         assert num_feats * 2 == self.embed_dims, 'embed_dims should' \
-            f' be exactly 2 times of num_feats. Found {self.embed_dims}' \
-            f' and {num_feats}.'
+                                                 f' be exactly 2 times of num_feats. Found {self.embed_dims}' \
+                                                 f' and {num_feats}.'
         self._init_layers()
 
     def _init_layers(self):
-        sub_fc_cls = Linear(self.embed_dims, self.sub_cls_out_channels)
-        obj_fc_cls = Linear(self.embed_dims, self.sub_cls_out_channels)
-        sub_reg_branch = []
-        obj_reg_branch = []
-        for _ in range(self.num_reg_fcs):
-            sub_reg_branch.append(Linear(self.embed_dims, self.embed_dims))
-            obj_reg_branch.append(Linear(self.embed_dims, self.embed_dims))
-            sub_reg_branch.append(nn.ReLU())
-            obj_reg_branch.append(nn.ReLU())
-        sub_reg_branch.append(Linear(self.embed_dims, 4))
-        # sub_reg_branch.append(nn.Sigmoid())
-        obj_reg_branch.append(Linear(self.embed_dims, 4))
-        # obj_reg_branch.append(nn.Sigmoid())
-        sub_reg_branch = nn.Sequential(*sub_reg_branch)
-        obj_reg_branch = nn.Sequential(*obj_reg_branch)
-        # last reg_branch is used to generate proposal from
-        # encode feature map when as_two_stage is True.
-        num_pred = self.transformer.decoder.num_layers
-
-        self.sub_cls_branches = nn.ModuleList(
-            [sub_fc_cls for _ in range(num_pred)])
-        self.sub_reg_branches = nn.ModuleList(
-            [sub_reg_branch for _ in range(num_pred)])
-        self.obj_cls_branches = nn.ModuleList(
-            [obj_fc_cls for _ in range(num_pred)])
-        self.obj_reg_branches = nn.ModuleList(
-            [obj_reg_branch for _ in range(num_pred)])
-        rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)#不能加self!
-        self.rel_cls_embedes = nn.ModuleList(
-            [rel_cls_embed for _ in range(num_pred)])#todo 模型不能self的套self,不然就 optimier group报错
-        self.query_embed = nn.Embedding(self.num_query,
-                                                self.embed_dims * 2)
         """Initialize layers of the transformer head."""
         self.input_proj = Conv2d(self.in_channels,
                                  self.embed_dims,
                                  kernel_size=1)
-        # # self.query_embed = nn.Embedding(self.num_query, self.embed_dims)
-        #
+        self.query_embed = nn.Embedding(self.num_query, self.embed_dims)
 
-        #
-        # self.obj_cls_embed = Linear(self.embed_dims, self.obj_cls_out_channels)
-        # self.obj_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
-        # self.sub_cls_embed = Linear(self.embed_dims, self.sub_cls_out_channels)
-        # self.sub_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
-        # self.rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)
+        self.obj_cls_embed = Linear(self.embed_dims, self.obj_cls_out_channels)
+        self.obj_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
+        self.sub_cls_embed = Linear(self.embed_dims, self.sub_cls_out_channels)
+        self.sub_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
+        self.rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)
 
         if self.use_mask:
             self.sub_bbox_attention = MHAttentionMap(self.embed_dims,
@@ -295,10 +261,10 @@ class PSGTrHead(AnchorFreeHead):
                                                      dropout=0.0)
             if not self.swin:
                 self.sub_mask_head = MaskHeadSmallConv(
-                    self.embed_dims + self.n_heads, [256, 256, 256],#todo 由于neck存在，所有层的feature map都是256[1024, 512, 256]
+                    self.embed_dims + self.n_heads, [1024, 512, 256],
                     self.embed_dims)
                 self.obj_mask_head = MaskHeadSmallConv(
-                    self.embed_dims + self.n_heads, [256, 256, 256],#todo 由于neck存在，所有层的feature map都是256[1024, 512, 256]
+                    self.embed_dims + self.n_heads, [1024, 512, 256],
                     self.embed_dims)
             elif self.swin:
                 self.sub_mask_head = MaskHeadSmallConv(
@@ -311,145 +277,84 @@ class PSGTrHead(AnchorFreeHead):
         # The initialization for transformer is important
         self.transformer.init_weights()
 
-    # def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
-    #                           missing_keys, unexpected_keys, error_msgs):
-    #     """load checkpoints."""
-    #     version = local_metadata.get('version', None)
-    #     if (version is None or version < 2):
-    #         convert_dict = {
-    #             '.self_attn.': '.attentions.0.',
-    #             '.ffn.': '.ffns.0.',
-    #             '.multihead_attn.': '.attentions.1.',
-    #             '.decoder.norm.': '.decoder.post_norm.',
-    #             '.query_embedding.': '.query_embed.'
-    #         }
-    #         state_dict_keys = list(state_dict.keys())
-    #         for k in state_dict_keys:
-    #             for ori_key, convert_key in convert_dict.items():
-    #                 if ori_key in k:
-    #                     convert_key = k.replace(ori_key, convert_key)
-    #                     state_dict[convert_key] = state_dict[k]
-    #                     del state_dict[k]
-    #     super(AnchorFreeHead,
-    #           self)._load_from_state_dict(state_dict, prefix, local_metadata,
-    #                                       strict, missing_keys,
-    #                                       unexpected_keys, error_msgs)
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                              missing_keys, unexpected_keys, error_msgs):
+        """load checkpoints."""
+        version = local_metadata.get('version', None)
+        if (version is None or version < 2):
+            convert_dict = {
+                '.self_attn.': '.attentions.0.',
+                '.ffn.': '.ffns.0.',
+                '.multihead_attn.': '.attentions.1.',
+                '.decoder.norm.': '.decoder.post_norm.',
+                '.query_embedding.': '.query_embed.'
+            }
+            state_dict_keys = list(state_dict.keys())
+            for k in state_dict_keys:
+                for ori_key, convert_key in convert_dict.items():
+                    if ori_key in k:
+                        convert_key = k.replace(ori_key, convert_key)
+                        state_dict[convert_key] = state_dict[k]
+                        del state_dict[k]
+        super(AnchorFreeHead,
+              self)._load_from_state_dict(state_dict, prefix, local_metadata,
+                                          strict, missing_keys,
+                                          unexpected_keys, error_msgs)
 
     def forward(self, feats, img_metas):
         # construct binary masks which used for the transformer.
         # NOTE following the official DETR repo, non-zero values representing
         # ignored positions, while zero values means valid positions.
-        last_features = feats[#feats: tuple, feature map
+        last_features = feats[  # feats: tuple, feature map
             -1]  ####get feature outputs of intermediate layers
-        # batch_size = last_features.size(0)
-        # input_img_h, input_img_w = img_metas[0]['batch_input_shape']
-        # masks = last_features.new_ones((batch_size, input_img_h, input_img_w))
-        # for img_id in range(batch_size):
-        #     img_h, img_w, _ = img_metas[img_id]['img_shape']
-        #     masks[img_id, :img_h, :img_w] = 0
-        #
-        last_features = self.input_proj(last_features)
-        # # interpolate masks to have the same spatial shape with feats
-        # masks = F.interpolate(masks.unsqueeze(1),
-        #                       size=last_features.shape[-2:]).to(
-        #                           torch.bool).squeeze(1)
-        # # position encoding
-        # pos_embed = self.positional_encoding(masks)  # [bs, embed_dim, h, w]
-        # # outs_dec: [nb_dec, bs, num_query, embed_dim]
-        # outs_dec, memory = self.transformer(feats, masks,
-        #                                     self.query_embed.weight, pos_embed)
-        batch_size = feats[0].size(0)
+        batch_size = last_features.size(0)
         input_img_h, input_img_w = img_metas[0]['batch_input_shape']
-        img_masks = feats[0].new_ones(
-            (batch_size, input_img_h, input_img_w))
+        masks = last_features.new_ones((batch_size, input_img_h, input_img_w))
         for img_id in range(batch_size):
             img_h, img_w, _ = img_metas[img_id]['img_shape']
-            img_masks[img_id, :img_h, :img_w] = 0
+            masks[img_id, :img_h, :img_w] = 0
 
-        mlvl_masks = []
-        mlvl_positional_encodings = []
-        for feat in feats:
-            mlvl_masks.append(
-                F.interpolate(img_masks[None],
-                              size=feat.shape[-2:]).to(torch.bool).squeeze(0))
-            mlvl_positional_encodings.append(
-                self.positional_encoding(mlvl_masks[-1]))
-
+        last_features = self.input_proj(last_features)
+        # interpolate masks to have the same spatial shape with feats
+        masks = F.interpolate(masks.unsqueeze(1),
+                              size=last_features.shape[-2:]).to(
+            torch.bool).squeeze(1)
+        # position encoding
+        pos_embed = self.positional_encoding(masks)  # [bs, embed_dim, h, w]
         # outs_dec: [nb_dec, bs, num_query, embed_dim]
-        hs, init_reference, inter_references , memory, enc_outputs_class, enc_outputs_coord = self.transformer(feats, mlvl_masks,
-                                            self.query_embed.weight, mlvl_positional_encodings)#outs_dec, memory
+        outs_dec, memory = self.transformer(last_features, masks,
+                                            self.query_embed.weight, pos_embed)
 
-        hs = hs.permute(0, 2, 1, 3)
-        sub_outputs_classes = []
-        sub_outputs_coords = []
-        obj_outputs_classes = []
-        obj_outputs_coords = []
-        rel_outputs_classes =[]
-        for lvl in range(hs.shape[0]):
-            if lvl == 0:
-                reference = init_reference
-            else:
-                reference = inter_references[lvl - 1]
-            reference = inverse_sigmoid(reference)
-            sub_outputs_class = self.sub_cls_branches[lvl](hs[lvl])
-            obj_outputs_class = self.obj_cls_branches[lvl](hs[lvl])
-            rel_outputs_class = self.rel_cls_embedes[lvl](hs[lvl])
-            sub_tmp = self.sub_reg_branches[lvl](hs[lvl])#(bs,n,4)
-            obj_tmp = self.obj_reg_branches[lvl](hs[lvl])
-            if reference.shape[-1] == 4:
-                sub_tmp += reference
-                obj_tmp += reference
-            else:
-                assert reference.shape[-1] == 2
-                sub_tmp[..., :2] += reference
-                obj_tmp[..., :2] += reference
-            sub_outputs_coord = sub_tmp.sigmoid()
-            obj_outputs_coord = obj_tmp.sigmoid()
-            sub_outputs_classes.append(sub_outputs_class)
-            sub_outputs_coords.append(sub_outputs_coord)
-            obj_outputs_classes.append(obj_outputs_class)
-            obj_outputs_coords.append(obj_outputs_coord)
-            rel_outputs_classes.append(rel_outputs_class)
+        sub_outputs_class = self.sub_cls_embed(outs_dec)
+        sub_outputs_coord = self.sub_box_embed(outs_dec).sigmoid()
+        obj_outputs_class = self.obj_cls_embed(outs_dec)
+        obj_outputs_coord = self.obj_box_embed(outs_dec).sigmoid()
 
-        sub_outputs_classes = torch.stack(sub_outputs_classes)
-        sub_outputs_coords = torch.stack(sub_outputs_coords)
-        obj_outputs_classes = torch.stack(obj_outputs_classes)
-        obj_outputs_coords = torch.stack(obj_outputs_coords)
-        rel_outputs_classes = torch.stack(rel_outputs_classes)
-
-
-        # sub_outputs_class = self.sub_cls_embed(outs_dec)
-        # sub_outputs_coord = self.sub_box_embed(outs_dec).sigmoid()
-        # obj_outputs_class = self.obj_cls_embed(outs_dec)
-        # obj_outputs_coord = self.obj_box_embed(outs_dec).sigmoid()
-        all_cls_scores = dict(sub=sub_outputs_classes, obj=obj_outputs_classes)
-
-        # rel_outputs_class = self.rel_cls_embed(outs_dec)
-        # all_cls_scores = dict(sub=sub_outputs_class, obj=obj_outputs_class)
-        # rel_outputs_class = self.rel_cls_embed(outs_dec)
-        if self.use_bias:#default false
-            pair_pred=torch.cat((torch.argmax(sub_outputs_class,-1,keepdim=True),torch.argmax(obj_outputs_class,
-                                                    -1,keepdim=True)),-1).squeeze(1).view(-1,2)#去掉batch dim
+        all_cls_scores = dict(sub=sub_outputs_class, obj=obj_outputs_class)
+        rel_outputs_class = self.rel_cls_embed(outs_dec)
+        if self.use_bias:  # default false
+            pair_pred = torch.cat((torch.argmax(sub_outputs_class, -1, keepdim=True), torch.argmax(obj_outputs_class,
+                                                                                                   -1, keepdim=True)),
+                                  -1).squeeze(1).view(-1, 2)  # 去掉batch dim
             rel_outputs_class = rel_outputs_class + self.freq_bias.index_with_labels(
                 pair_pred.long()).view(outs_dec.shape[0], batch_size, -1, self.num_relations + 1)
-
-        # pair_pred = torch.cat((torch.argmax(sub_outputs_class[-1], -1, keepdim=True), torch.argmax(obj_outputs_class[-1],
-        #                                                                   -1, keepdim=True)),-1)
-        # sub_boxs=sub_outputs_coord[-1]
-        # obj_boxs=obj_outputs_coord[-1]
-        # language_rel_score=self.languagemodel(img_metas,sub_boxs,obj_boxs,pair_pred)
-        # rel_outputs_class[-1,:,:,:] +=language_rel_score
+        pair_pred = torch.cat(
+            (torch.argmax(sub_outputs_class[-1], -1, keepdim=True), torch.argmax(obj_outputs_class[-1],
+                                                                                 -1, keepdim=True)), -1)
+        sub_boxs = sub_outputs_coord[-1]
+        obj_boxs = obj_outputs_coord[-1]
+        language_rel_score = self.languagemodel(img_metas, sub_boxs, obj_boxs, pair_pred)
+        rel_outputs_class[-1, :, :, :] += language_rel_score
         # rel_outputs_class = rel_outputs_class +language_rel_score
-        all_cls_scores['rel'] = rel_outputs_classes # torch.stack([rel_outputs_classes for _ in range(hs.shape[0])],0)
+        all_cls_scores['rel'] = rel_outputs_class
         if self.use_mask:
             ###########for segmentation#################
-            # for lvl in range(hs.shape[0]):
-            sub_bbox_mask = self.sub_bbox_attention(hs[-1],
+            sub_bbox_mask = self.sub_bbox_attention(outs_dec[-1],
                                                     memory,
-                                                    mask=mlvl_masks[-1])
-            obj_bbox_mask = self.obj_bbox_attention(hs[-1],
+                                                    mask=masks)
+            obj_bbox_mask = self.obj_bbox_attention(outs_dec[-1],
                                                     memory,
-                                                    mask=mlvl_masks[-1])
+                                                    mask=masks)
             sub_seg_masks = self.sub_mask_head(last_features, sub_bbox_mask,
                                                [feats[2], feats[1], feats[0]])
             outputs_sub_seg_masks = sub_seg_masks.view(batch_size,
@@ -463,12 +368,12 @@ class PSGTrHead(AnchorFreeHead):
                                                        obj_seg_masks.shape[-2],
                                                        obj_seg_masks.shape[-1])
 
-            all_bbox_preds = dict(sub=sub_outputs_coords,
-                                  obj=obj_outputs_coords,
+            all_bbox_preds = dict(sub=sub_outputs_coord,
+                                  obj=obj_outputs_coord,
                                   sub_seg=outputs_sub_seg_masks,
                                   obj_seg=outputs_obj_seg_masks)
         else:
-            all_bbox_preds = dict(sub=sub_outputs_coords, obj=obj_outputs_coords)
+            all_bbox_preds = dict(sub=sub_outputs_coord, obj=obj_outputs_coord)
         return all_cls_scores, all_bbox_preds
 
     @force_fp32(apply_to=('all_cls_scores_list', 'all_bbox_preds_list'))
@@ -559,8 +464,8 @@ class PSGTrHead(AnchorFreeHead):
         for s_loss_cls_i, o_loss_cls_i, r_loss_cls_i, \
             s_loss_bbox_i, o_loss_bbox_i, \
             s_loss_iou_i, o_loss_iou_i in zip(s_losses_cls[:-1], o_losses_cls[:-1], r_losses_cls[:-1],
-                                          s_losses_bbox[:-1], o_losses_bbox[:-1],
-                                          s_losses_iou[:-1], o_losses_iou[:-1]):
+                                              s_losses_bbox[:-1], o_losses_bbox[:-1],
+                                              s_losses_iou[:-1], o_losses_iou[:-1]):
             loss_dict[f'd{num_dec_layer}.s_loss_cls'] = s_loss_cls_i
             loss_dict[f'd{num_dec_layer}.o_loss_cls'] = o_loss_cls_i
             loss_dict[f'd{num_dec_layer}.r_loss_cls'] = r_loss_cls_i
@@ -644,7 +549,7 @@ class PSGTrHead(AnchorFreeHead):
             # o_focal_loss = self.obj_focal_loss(o_mask_preds,o_mask_targets,num_matches)
             o_dice_loss = self.obj_dice_loss(
                 o_mask_preds, o_mask_targets,
-                num_matches) 
+                num_matches)
         else:
             s_dice_loss = None
             o_dice_loss = None
@@ -656,7 +561,7 @@ class PSGTrHead(AnchorFreeHead):
 
         # construct weighted avg_factor to match with the official DETR repo
         cls_avg_factor = num_total_pos * 1.0 + \
-            num_total_neg * self.bg_cls_weight
+                         num_total_neg * self.bg_cls_weight
         if self.sync_cls_avg_factor:
             cls_avg_factor = reduce_mean(
                 s_cls_scores.new_tensor([cls_avg_factor]))
@@ -674,7 +579,7 @@ class PSGTrHead(AnchorFreeHead):
                                        o_label_weights,
                                        avg_factor=num_total_pos * 1.0)
 
-        r_loss_cls = self.rel_loss_cls(r_cls_scores,#[:,57]
+        r_loss_cls = self.rel_loss_cls(r_cls_scores,  # [:,57]
                                        r_labels,
                                        r_label_weights,
                                        avg_factor=cls_avg_factor)
@@ -690,7 +595,7 @@ class PSGTrHead(AnchorFreeHead):
             img_h, img_w, _ = img_meta['img_shape']
             factor = bbox_pred.new_tensor([img_w, img_h, img_w,
                                            img_h]).unsqueeze(0).repeat(
-                                               bbox_pred.size(0), 1)
+                bbox_pred.size(0), 1)
             factors.append(factor)
         factors = torch.cat(factors, 0)
 
@@ -754,11 +659,11 @@ class PSGTrHead(AnchorFreeHead):
          o_bbox_targets_list, s_bbox_weights_list, o_bbox_weights_list,
          s_mask_targets_list, o_mask_targets_list, pos_inds_list,
          neg_inds_list, s_mask_preds_list, o_mask_preds_list) = multi_apply(
-             self._get_target_single, s_cls_scores_list, o_cls_scores_list,
-             r_cls_scores_list, s_bbox_preds_list, o_bbox_preds_list,
-             s_mask_preds_list, o_mask_preds_list, gt_rels_list,
-             gt_bboxes_list, gt_labels_list, gt_masks_list, img_metas,
-             gt_bboxes_ignore_list)
+            self._get_target_single, s_cls_scores_list, o_cls_scores_list,
+            r_cls_scores_list, s_bbox_preds_list, o_bbox_preds_list,
+            s_mask_preds_list, o_mask_preds_list, gt_rels_list,
+            gt_bboxes_list, gt_labels_list, gt_masks_list, img_metas,
+            gt_bboxes_ignore_list)
         num_total_pos = sum((inds.numel() for inds in pos_inds_list))
         num_total_neg = sum((inds.numel() for inds in neg_inds_list))
         return (s_labels_list, o_labels_list, r_labels_list,
@@ -783,9 +688,7 @@ class PSGTrHead(AnchorFreeHead):
                            img_meta,
                            gt_bboxes_ignore=None):
         """"Compute regression and classification targets for one image.
-
         Outputs from a single decoder layer of a single feature level are used.
-
         Args:
             s_cls_score (Tensor): Subject box score logits from a single decoder layer
                 for one image. Shape [num_query, cls_out_channels].
@@ -812,10 +715,8 @@ class PSGTrHead(AnchorFreeHead):
             img_meta (dict): Meta information for one image.
             gt_bboxes_ignore (Tensor, optional): Bounding boxes
                 which can be ignored. Default None.
-
         Returns:
             tuple[Tensor]: a tuple containing the following for one image.
-
                 - s/o/r_labels (Tensor): Labels of each image.
                 - s/o/r_label_weights (Tensor]): Label weights of each image.
                 - s/o_bbox_targets (Tensor): BBox targets of each image.
@@ -876,7 +777,7 @@ class PSGTrHead(AnchorFreeHead):
 
         # label targets
         s_labels = gt_sub_bboxes.new_full(
-            (num_bboxes, ), self.num_classes,
+            (num_bboxes,), self.num_classes,
             dtype=torch.long)  ### 0-based, class [num_classes]  as background
         s_labels[pos_inds] = gt_sub_labels[
             s_sampling_result.pos_assigned_gt_inds]
@@ -884,7 +785,7 @@ class PSGTrHead(AnchorFreeHead):
         s_label_weights[pos_inds] = 1.0
 
         o_labels = gt_obj_bboxes.new_full(
-            (num_bboxes, ), self.num_classes,
+            (num_bboxes,), self.num_classes,
             dtype=torch.long)  ### 0-based, class [num_classes] as background
         o_labels[pos_inds] = gt_obj_labels[
             o_sampling_result.pos_assigned_gt_inds]
@@ -892,7 +793,7 @@ class PSGTrHead(AnchorFreeHead):
         o_label_weights[pos_inds] = 1.0
 
         r_labels = gt_obj_bboxes.new_full(
-            (num_bboxes, ), 0,
+            (num_bboxes,), 0,
             dtype=torch.long)  ### 1-based, class 0 as background
         r_labels[pos_inds] = gt_rel_labels[
             o_sampling_result.pos_assigned_gt_inds]
@@ -907,14 +808,13 @@ class PSGTrHead(AnchorFreeHead):
             # mask targets for subjects and objects
             s_mask_targets = gt_sub_masks[
                 s_sampling_result.pos_assigned_gt_inds,
-                ...]  
+                ...]
             s_mask_preds = s_mask_preds[pos_inds]
-            
 
             o_mask_targets = gt_obj_masks[
                 o_sampling_result.pos_assigned_gt_inds, ...]
             o_mask_preds = o_mask_preds[pos_inds]
-            
+
             s_mask_preds = interpolate(s_mask_preds[:, None],
                                        size=gt_sub_masks.shape[-2:],
                                        mode='bilinear',
@@ -974,7 +874,6 @@ class PSGTrHead(AnchorFreeHead):
                       proposal_cfg=None,
                       **kwargs):
         """Forward function for training mode.
-
         Args:
             x (list[Tensor]): Features from backbone.
             img_metas (list[dict]): Meta information of each image, e.g.,
@@ -989,7 +888,6 @@ class PSGTrHead(AnchorFreeHead):
                 ignored, shape (num_ignored_gts, 4).
             proposal_cfg (mmcv.Config): Test / postprocessing configuration,
                 if None, test_cfg would be used.
-
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
@@ -1081,7 +979,7 @@ class PSGTrHead(AnchorFreeHead):
 
         r_dists = r_lgs.reshape(
             -1, self.num_relations +
-            1)[triplet_index]  #### NOTE: to match the evaluation in vg
+                1)[triplet_index]  #### NOTE: to match the evaluation in vg
 
         if self.use_mask:
             s_mask_pred = s_mask_pred[triplet_index]
@@ -1093,13 +991,13 @@ class PSGTrHead(AnchorFreeHead):
 
             s_mask_pred_logits = s_mask_pred
             o_mask_pred_logits = o_mask_pred
-            
+
             s_mask_pred = torch.sigmoid(s_mask_pred) > 0.85
             o_mask_pred = torch.sigmoid(o_mask_pred) > 0.85
             ### triplets deduplicate####
             relation_classes = defaultdict(lambda: [])
-            for k, (s_l,o_l,r_l) in enumerate(zip(s_labels,o_labels,r_labels)):
-                relation_classes[(s_l.item(),o_l.item(),r_l.item())].append(k)
+            for k, (s_l, o_l, r_l) in enumerate(zip(s_labels, o_labels, r_labels)):
+                relation_classes[(s_l.item(), o_l.item(), r_l.item())].append(k)
             s_binary_masks = s_mask_pred.to(torch.float).flatten(1)
             o_binary_masks = o_mask_pred.to(torch.float).flatten(1)
 
@@ -1110,23 +1008,23 @@ class PSGTrHead(AnchorFreeHead):
                     other_s_masks = s_binary_masks[triplets_ids[1:]]
                     other_o_masks = o_binary_masks[triplets_ids[1:]]
                     # calculate ious
-                    s_ious = base_s_mask.mm(other_s_masks.transpose(0,1))/((base_s_mask+other_s_masks)>0).sum(-1)
-                    o_ious = base_o_mask.mm(other_o_masks.transpose(0,1))/((base_o_mask+other_o_masks)>0).sum(-1)
+                    s_ious = base_s_mask.mm(other_s_masks.transpose(0, 1)) / ((base_s_mask + other_s_masks) > 0).sum(-1)
+                    o_ious = base_o_mask.mm(other_o_masks.transpose(0, 1)) / ((base_o_mask + other_o_masks) > 0).sum(-1)
                     ids_left = []
-                    for s_iou, o_iou, other_id in zip(s_ious[0],o_ious[0],triplets_ids[1:]):
-                        if (s_iou>0.5) & (o_iou>0.5):
+                    for s_iou, o_iou, other_id in zip(s_ious[0], o_ious[0], triplets_ids[1:]):
+                        if (s_iou > 0.5) & (o_iou > 0.5):
                             keep_tri[other_id] = False
                         else:
                             ids_left.append(other_id)
                     triplets_ids = ids_left
                 return keep_tri
-            
-            keep_tri = torch.ones_like(r_labels,dtype=torch.bool)
+
+            keep_tri = torch.ones_like(r_labels, dtype=torch.bool)
             for triplets_ids in relation_classes.values():
-                if len(triplets_ids)>1:
+                if len(triplets_ids) > 1:
                     keep_tri = dedup_triplets(triplets_ids, s_binary_masks, o_binary_masks, keep_tri)
 
-            s_labels = s_labels[keep_tri] 
+            s_labels = s_labels[keep_tri]
             o_labels = o_labels[keep_tri]
             s_mask_pred = s_mask_pred[keep_tri]
             o_mask_pred = o_mask_pred[keep_tri]
@@ -1136,11 +1034,11 @@ class PSGTrHead(AnchorFreeHead):
             r_scores = r_scores[keep_tri]
             r_labels = r_labels[keep_tri]
             r_dists = r_dists[keep_tri]
-            rel_pairs = torch.arange(keep_tri.sum()*2,
-                            dtype=torch.int).reshape(2, -1).T
+            rel_pairs = torch.arange(keep_tri.sum() * 2,
+                                     dtype=torch.int).reshape(2, -1).T
             complete_r_labels = r_labels
             complete_r_dists = r_dists
-            
+
             s_binary_masks = s_binary_masks[keep_tri]
             o_binary_masks = o_binary_masks[keep_tri]
 
@@ -1148,11 +1046,12 @@ class PSGTrHead(AnchorFreeHead):
             o_mask_pred_logits = o_mask_pred_logits[keep_tri]
 
             ###end triplets deduplicate####
-            
+
             #### for panoptic postprocessing ####
             keep = (s_labels != (s_logits.shape[-1] - 1)) & (
                     o_labels != (s_logits.shape[-1] - 1)) & (
-                    s_scores[keep_tri]>0.5) & (o_scores[keep_tri] > 0.5) & (r_scores > 0.3) ## the threshold is set to 0.85
+                           s_scores[keep_tri] > 0.5) & (o_scores[keep_tri] > 0.5) & (
+                               r_scores > 0.3)  ## the threshold is set to 0.85
             r_scores = r_scores[keep]
             r_labels = r_labels[keep]
             r_dists = r_dists[keep]
@@ -1170,7 +1069,7 @@ class PSGTrHead(AnchorFreeHead):
                 pan_img = torch.ones(mask_size).cpu().to(torch.long)
                 pan_masks = pan_img.unsqueeze(0).cpu().to(torch.long)
                 pan_rel_pairs = torch.arange(len(labels), dtype=torch.int).to(masks.device).reshape(2, -1).T
-                rels = torch.tensor([0,0,0]).view(-1,3)
+                rels = torch.tensor([0, 0, 0]).view(-1, 3)
                 pan_labels = torch.tensor([0])
             else:
                 stuff_equiv_classes = defaultdict(lambda: [])
@@ -1189,11 +1088,11 @@ class PSGTrHead(AnchorFreeHead):
                         base_mask = binary_masks[pred_ids[0]].unsqueeze(0)
                         other_masks = binary_masks[pred_ids[1:]]
                         # calculate ious
-                        ious = base_mask.mm(other_masks.transpose(0,1))/((base_mask+other_masks)>0).sum(-1)
+                        ious = base_mask.mm(other_masks.transpose(0, 1)) / ((base_mask + other_masks) > 0).sum(-1)
                         ids_left = []
                         thing_dedup[pred_ids[0]].append(pred_ids[0])
-                        for iou, other_id in zip(ious[0],pred_ids[1:]):
-                            if iou>0.5:
+                        for iou, other_id in zip(ious[0], pred_ids[1:]):
+                            if iou > 0.5:
                                 thing_dedup[pred_ids[0]].append(other_id)
                             else:
                                 ids_left.append(other_id)
@@ -1204,7 +1103,7 @@ class PSGTrHead(AnchorFreeHead):
                 # create dict that groups duplicate masks
                 for thing_pred_ids in thing_classes.values():
                     if len(thing_pred_ids) > 1:
-                      dedup_things(thing_pred_ids, binary_masks)
+                        dedup_things(thing_pred_ids, binary_masks)
                     else:
                         thing_dedup[thing_pred_ids[0]].append(thing_pred_ids[0])
 
@@ -1235,17 +1134,18 @@ class PSGTrHead(AnchorFreeHead):
                                 for eq_id in equiv:
                                     m_id.masked_fill_(m_id.eq(eq_id), equiv[0])
                                     pan_rel_pairs[eq_id] = equiv[0]
-                    
-                    m_ids_remain,_ = m_id.unique().sort()
+
+                    m_ids_remain, _ = m_id.unique().sort()
 
                     pan_rel_pairs = pan_rel_pairs.reshape(2, -1).T
-                    no_obj_filter = torch.zeros(pan_rel_pairs.shape[0],dtype=torch.bool)
+                    no_obj_filter = torch.zeros(pan_rel_pairs.shape[0], dtype=torch.bool)
                     for triplet_id in range(pan_rel_pairs.shape[0]):
-                        if pan_rel_pairs[triplet_id,0] in m_ids_remain and pan_rel_pairs[triplet_id,1] in m_ids_remain:
-                            no_obj_filter[triplet_id]=True
+                        if pan_rel_pairs[triplet_id, 0] in m_ids_remain and pan_rel_pairs[
+                            triplet_id, 1] in m_ids_remain:
+                            no_obj_filter[triplet_id] = True
                     pan_rel_pairs = pan_rel_pairs[no_obj_filter]
                     r_labels, r_dists = r_labels[no_obj_filter], r_dists[no_obj_filter]
-                    pan_labels = [] 
+                    pan_labels = []
                     pan_masks = []
                     for i, m_id_remain in enumerate(m_ids_remain):
                         pan_masks.append(m_id.eq(m_id_remain).unsqueeze(0))
@@ -1262,11 +1162,14 @@ class PSGTrHead(AnchorFreeHead):
                         area.append(m_id.eq(i).sum().item())
                     return area, seg_img, pan_rel_pairs, pan_masks, r_labels, r_dists, pan_labels
 
-                area, pan_img, pan_rel_pairs, pan_masks, r_labels, r_dists, pan_labels = get_ids_area(mask_logits, pan_rel_pairs, r_labels, r_dists, dedup=True)
+                area, pan_img, pan_rel_pairs, pan_masks, r_labels, r_dists, pan_labels = get_ids_area(mask_logits,
+                                                                                                      pan_rel_pairs,
+                                                                                                      r_labels, r_dists,
+                                                                                                      dedup=True)
                 if r_labels.numel() == 0:
-                    rels = torch.tensor([0,0,0]).view(-1,3)
+                    rels = torch.tensor([0, 0, 0]).view(-1, 3)
                 else:
-                    rels = torch.cat((pan_rel_pairs,r_labels.unsqueeze(-1)),-1)
+                    rels = torch.cat((pan_rel_pairs, r_labels.unsqueeze(-1)), -1)
                 # if labels.numel() > 0:
                 #     # We know filter empty masks as long as we find some
                 #     while True:
@@ -1304,12 +1207,12 @@ class PSGTrHead(AnchorFreeHead):
 
         if self.use_mask:
             return det_bboxes, complete_labels, rel_pairs, output_masks, pan_rel_pairs, \
-                pan_img, complete_r_labels, complete_r_dists, r_labels, r_dists, pan_masks, rels, pan_labels
+                   pan_img, complete_r_labels, complete_r_dists, r_labels, r_dists, pan_masks, rels, pan_labels
         else:
             return det_bboxes, labels, rel_pairs, r_labels, r_dists
 
     def simple_test_bboxes(self, feats, img_metas, rescale=False):
-        
+
         # forward of this head requires img_metas
         # start = time.time()
         outs = self.forward(feats, img_metas)

@@ -4,8 +4,8 @@ _base_ = [
 ]
 
 custom_imports = dict(imports=[
-    'openpsg.models.frameworks.psgtr', 'openpsg.models.losses.seg_losses',
-    'openpsg.models.relation_heads.psgtr_head', 'openpsg.datasets',
+    'openpsg.models.frameworks.deformpsgtr', 'openpsg.models.losses.seg_losses',
+    'openpsg.models.relation_heads.deformpsgtr_head', 'openpsg.datasets',
     'openpsg.datasets.pipelines.loading',
     'openpsg.datasets.pipelines.rel_randomcrop',
     'openpsg.models.relation_heads.approaches.matcher', 'openpsg.utils'
