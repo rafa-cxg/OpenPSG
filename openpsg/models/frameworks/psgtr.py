@@ -79,7 +79,7 @@ class PSGTr(SingleStageDetector):
                  test_cfg=None,
                  pretrained=None,
                  init_cfg=None):
-        super(PSGTr, self).__init__(backbone, None, bbox_head, train_cfg,
+        super(PSGTr, self).__init__(backbone,None, bbox_head, train_cfg,
                                     test_cfg, pretrained, init_cfg)
         self.CLASSES = self.bbox_head.object_classes
         self.PREDICATES = self.bbox_head.predicate_classes
@@ -130,10 +130,14 @@ class PSGTr(SingleStageDetector):
 
             gt_masks = new_gt_masks
 
-        losses = self.bbox_head.forward_train(x, img_metas, gt_rels, gt_bboxes,
+        losses_head,loss_tail = self.bbox_head.forward_train(x, img_metas, gt_rels, gt_bboxes,
                                               gt_labels, gt_masks,
                                               gt_bboxes_ignore)
-        return losses
+        loss_tail_temp={}
+        for loss in loss_tail:
+            loss_tail_temp.update({loss+"_tail": loss_tail[loss]})
+        losses_head.update(loss_tail_temp)
+        return  losses_head
 
     def simple_test(self, img, img_metas, rescale=False):
 
@@ -146,4 +150,4 @@ class PSGTr(SingleStageDetector):
             for triplets in results_list
         ]
         # print(time.time() - s)
-        return
+        return sg_results

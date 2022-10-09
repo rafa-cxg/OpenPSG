@@ -186,7 +186,7 @@ test_pipeline = [
 ]
 
 evaluation = dict(
-    interval=300,
+    interval=1,
     metric='sgdet',
     relation_mode=True,
     classwise=True,

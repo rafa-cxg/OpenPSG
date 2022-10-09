@@ -46,7 +46,28 @@ model = dict(
                                operation_order=('self_attn', 'norm',
                                                 'cross_attn', 'norm', 'ffn',
                                                 'norm')),
-                       )),
+                       ),
+
+
+                   ),
+                   # decoder_tail=dict(
+                   #     type='DetrTransformerDecoder',
+                   #     return_intermediate=True,
+                   #     num_layers=6,
+                   #     transformerlayers=dict(
+                   #         type='DetrTransformerDecoderLayer',
+                   #         attn_cfgs=dict(type='MultiheadAttention',
+                   #                        embed_dims=256,
+                   #                        num_heads=8,
+                   #                        dropout=0.1),
+                   #         feedforward_channels=2048,
+                   #         ffn_dropout=0.1,
+                   #         operation_order=('self_attn', 'norm',
+                   #                          'cross_attn', 'norm', 'ffn',
+                   #                          'norm')),
+                   # ),
+                   tail_relation_idx=[11, 19, 28, 29, 31, 32, 34, 35, 36, 39, 41, 42, 54],
+
                    positional_encoding=dict(type='SinePositionalEncoding',
                                             num_feats=128,
                                             normalize=True),
