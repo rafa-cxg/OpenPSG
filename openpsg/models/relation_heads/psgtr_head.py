@@ -259,7 +259,7 @@ class PSGTrHead(AnchorFreeHead):
         self.obj_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
         self.sub_cls_embed = Linear(self.embed_dims, self.sub_cls_out_channels)
         self.sub_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
-        self.rel_cls_embed_head = Linear(self.embed_dims, self.rel_cls_out_channels)
+        self.rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)
         self.rel_cls_embed_tail = Linear(self.embed_dims, self.num_relations_tail+1)
 
         if self.use_mask:
@@ -338,6 +338,7 @@ class PSGTrHead(AnchorFreeHead):
         # outs_dec: [nb_dec, bs, num_query, embed_dim]
         outs_dec, memory = self.transformer(last_features, masks,
                                             self.query_embed.weight, pos_embed)
+        #用于替换  self.query_embed.weight torch.cat((self.query_embed_head.weight, self.query_embed_tail.weight), 0)
         #################
         #only use  new decoder
         # bs, c, h, w = last_features.shape
@@ -387,7 +388,7 @@ class PSGTrHead(AnchorFreeHead):
         all_cls_scores_head = dict(sub=sub_outputs_class_head, obj=obj_outputs_class_head)
         all_cls_scores_tail = dict(sub=sub_outputs_class_tail, obj=obj_outputs_class_tail)
 
-        rel_outputs_class_head = self.rel_cls_embed_head(outs_dec[:,:,:(self.num_query-self.num_query_tail),:])
+        rel_outputs_class_head = self.rel_cls_embed(outs_dec[:,:,:(self.num_query-self.num_query_tail),:])
         rel_outputs_class_tail = self.rel_cls_embed_tail(outs_dec[:,:,((self.num_query-self.num_query_tail)):,:])
 
         if self.use_bias:  # default false

@@ -15,7 +15,7 @@ load_from = None
 resume_from = None
 
 # workflow = [('train', 1), ('val', 1)]
-workflow = [('train', 1), ('val', 1)]
+workflow = [('train', 0), ('val', 1)]
 checkpoint_config = dict(interval=300, max_keep_ckpts=10)
 evaluation = dict(
     interval=300,
