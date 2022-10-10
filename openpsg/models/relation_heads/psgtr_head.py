@@ -200,7 +200,7 @@ class PSGTrHead(AnchorFreeHead):
         self.test_cfg = test_cfg
         self.fp16_enabled = False
         self.swin = swin_backbone
-        self.languagemodel = TwoStagePredictor(train_cfg, self.object_classes, num_classes, num_relations)
+        # self.languagemodel = TwoStagePredictor(train_cfg, self.object_classes, num_classes, num_relations)
 
         self.obj_loss_cls = build_loss(obj_loss_cls)
         self.obj_loss_bbox = build_loss(obj_loss_bbox)
@@ -377,13 +377,13 @@ class PSGTrHead(AnchorFreeHead):
         obj_outputs_coord = self.obj_box_embed(outs_dec).sigmoid()
 
         sub_outputs_class_head=sub_outputs_class[...,:self.num_query_head,:]
-        sub_outputs_coord_head=sub_outputs_coord[...,:self.num_query_head,:]
+        # sub_outputs_coord_head=sub_outputs_coord[...,:self.num_query_head,:]
         obj_outputs_class_head=obj_outputs_class[...,:self.num_query_head,:]
-        obj_outputs_coord_head=obj_outputs_coord[...,:self.num_query_head,:]
+        # obj_outputs_coord_head=obj_outputs_coord[...,:self.num_query_head,:]
         sub_outputs_class_tail=sub_outputs_class[...,self.num_query_head:,:]
-        sub_outputs_coord_tail=sub_outputs_coord[...,self.num_query_head:,:]
+        # sub_outputs_coord_tail=sub_outputs_coord[...,self.num_query_head:,:]
         obj_outputs_class_tail=obj_outputs_class[...,self.num_query_head:,:]
-        obj_outputs_coord_tail=obj_outputs_coord[...,self.num_query_head:,:]
+        # obj_outputs_coord_tail=obj_outputs_coord[...,self.num_query_head:,:]
         all_cls_scores_head = dict(sub=sub_outputs_class_head, obj=obj_outputs_class_head)
         all_cls_scores_tail = dict(sub=sub_outputs_class_tail, obj=obj_outputs_class_tail)
 
@@ -408,7 +408,11 @@ class PSGTrHead(AnchorFreeHead):
         all_cls_scores_head['rel'] = rel_outputs_class_head
 
         map_rel_outputs_class_tail_to_all=torch.zeros_like(rel_outputs_class_head[:,:,:self.num_query_tail])
-        self.map_rel_outputs_class_tail_to_all=map_rel_outputs_class_tail_to_all.scatter_(-1, torch.tensor(self.tail_relation_idx).unsqueeze(0).unsqueeze(0).cuda().repeat(6,1,30,1), rel_outputs_class_tail)
+        map_rel_outputs_class_tail_to_all=map_rel_outputs_class_tail_to_all.new_full(map_rel_outputs_class_tail_to_all.shape,-1e-6)
+        temp=[0]
+
+        temp.extend(self.tail_relation_idx)
+        self.map_rel_outputs_class_tail_to_all=map_rel_outputs_class_tail_to_all.scatter_(-1, torch.tensor(temp).unsqueeze(0).unsqueeze(0).cuda().repeat(6,1,30,1), rel_outputs_class_tail)
         all_cls_scores_tail['rel'] = rel_outputs_class_tail   #map_rel_outputs_class_tail_to_all
         # all_cls_scores['rel']=torch.cat((rel_outputs_class_head,map_rel_outputs_class_tail_to_all),2)
         if self.use_mask:
@@ -971,6 +975,8 @@ class PSGTrHead(AnchorFreeHead):
         """
         assert proposal_cfg is None, '"proposal_cfg" must be None'
         outs_head, outs_tail = self(x, img_metas)
+
+
         if gt_labels is None:
             loss_inputs = outs + (gt_rels, gt_bboxes, gt_masks, img_metas)
         else:
@@ -1001,6 +1007,7 @@ class PSGTrHead(AnchorFreeHead):
             r_class_weight[1:] = torch.sum(self.statistics['relation_counter'], -1) / self.statistics[
                 'relation_counter']
         self.rel_loss_cls.class_weight=r_class_weight
+        self.rel_loss_cls.class_weight[0]=0.05
         self.is_head = False
         losses_tail = self.loss(*loss_inputs_tail, is_head=self.is_head, gt_bboxes_ignore=gt_bboxes_ignore)
         self.rel_loss_cls.class_weight = class_weight_head
