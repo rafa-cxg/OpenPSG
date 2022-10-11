@@ -76,6 +76,12 @@ def parse_args():
         help='job launcher',
     )
     parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument(
+        '--freeze',
+        type= bool,
+        default=False,
+        help='freeze model except relation_head_tail',
+    )
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -87,6 +93,7 @@ def parse_args():
     if args.options:
         warnings.warn('--options is deprecated in favor of --cfg-options')
         args.cfg_options = args.options
+
 
     return args
 
@@ -211,6 +218,13 @@ def main():
 
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
+    if args.freeze :
+        for name, para in model.named_parameters():
+            # 除最后的全连接层外，其他权重全部冻结
+            if "rel_cls_embed_tail" not in name:
+                para.requires_grad = False
+        pg = [name for name, p in model.named_parameters() if p.requires_grad]
+        print('require_grad:{}'.format(pg))
     cfg.device='cuda'
     train_detector(
         model,

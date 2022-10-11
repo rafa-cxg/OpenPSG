@@ -247,6 +247,7 @@ class PSGTrHead(AnchorFreeHead):
                                                  f' and {num_feats}.'
         self._init_layers()
 
+
     def _init_layers(self):
         """Initialize layers of the transformer head."""
         self.input_proj = Conv2d(self.in_channels,
@@ -409,7 +410,7 @@ class PSGTrHead(AnchorFreeHead):
         all_cls_scores_head['rel'] = rel_outputs_class_head
 
         map_rel_outputs_class_tail_to_all=torch.zeros_like(rel_outputs_class_head[:,:,:self.num_query_tail])
-        map_rel_outputs_class_tail_to_all=map_rel_outputs_class_tail_to_all.new_full(map_rel_outputs_class_tail_to_all.shape,-1e-6)
+        map_rel_outputs_class_tail_to_all=map_rel_outputs_class_tail_to_all.new_full(map_rel_outputs_class_tail_to_all.shape,-1e6)
         temp=[0]
 
         temp.extend(self.tail_relation_idx)
@@ -643,6 +644,8 @@ class PSGTrHead(AnchorFreeHead):
 
 
         # construct weighted avg_factor to match with the official DETR repo
+        if self.is_head==False:
+            self.bg_cls_weight=self.rel_loss_cls.class_weight[0]
         cls_avg_factor = num_total_pos * 1.0 + \
                          num_total_neg * self.bg_cls_weight
         if self.sync_cls_avg_factor:
