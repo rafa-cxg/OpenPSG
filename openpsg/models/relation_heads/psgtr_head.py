@@ -979,7 +979,7 @@ class PSGTrHead(AnchorFreeHead):
         """
         assert proposal_cfg is None, '"proposal_cfg" must be None'
         outs_head, outs_tail = self(x, img_metas)
-
+        flag_no_tail_label=False
 
         if gt_labels is None:
             loss_inputs = outs + (gt_rels, gt_bboxes, gt_masks, img_metas)
@@ -988,15 +988,16 @@ class PSGTrHead(AnchorFreeHead):
                                   img_metas)
             gt_rels_tail=[]
             gt_rel_tail = []
-            for gt_rel in gt_rels:
+            for gt_rel in gt_rels:#gt_rels list[bs_pergpu]
                 for rel in gt_rel:
                     if rel[-1] in  self.tail_relation_idx:
 
-                        gt_rel_tail.append(torch.tensor(self.tail_relation_idx.index(rel[-1])).cuda())
+                        gt_rel_tail.append(torch.tensor(self.tail_relation_idx.index(rel[-1])+1).cuda())# 还要算上0类！所以要+1
                     else:
 
                         gt_rel_tail.append(torch.tensor([0]).cuda())
                 gt_rel_tail=torch.tensor(gt_rel_tail).cuda()
+
                 triplet=torch.cat((gt_rel[:,:2],gt_rel_tail.unsqueeze(1)),-1)
                 gt_rels_tail.append(triplet)
             loss_inputs_tail = outs_tail + (gt_rels_tail, gt_bboxes, gt_labels, gt_masks,
@@ -1014,6 +1015,7 @@ class PSGTrHead(AnchorFreeHead):
         self.rel_loss_cls.class_weight[0]=0.05
         self.is_head = False
         losses_tail = self.loss(*loss_inputs_tail, is_head=self.is_head, gt_bboxes_ignore=gt_bboxes_ignore)
+
         self.rel_loss_cls.class_weight = class_weight_head
         return losses_head, losses_tail
 

@@ -1,7 +1,7 @@
 import os.path as osp
 import random
 from collections import defaultdict
-
+import copy
 import mmcv
 import numpy as np
 import torch
@@ -94,6 +94,23 @@ class PanopticSceneGraphDataset(CocoPanopticDataset):
                 d for d in dataset['data']
                 if d['image_id'] not in dataset['test_image_ids']
             ]
+            self.data_copy=[]
+            for index, data in enumerate(self.data):
+                data_relation=[]
+                data_=copy.deepcopy(data)
+                for idx, triblet in  enumerate(data['relations']) : #in self.tail_relation_idx:
+                    if triblet[-1]  in [11, 19, 28, 29, 31, 32, 34, 35, 36, 39, 41, 42, 54]:
+                        data_relation.append(triblet)
+
+
+                if data_relation==[]:
+                    pass
+                else:
+                    data_['relations'] = data_relation
+                    self.data_copy.append(data_)
+
+            self.data=self.data_copy
+            del self.data_copy
             # self.data = self.data[:16] # for quick debug
         elif split == 'test':
             self.data = [

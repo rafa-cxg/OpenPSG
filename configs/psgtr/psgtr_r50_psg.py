@@ -186,7 +186,7 @@ test_pipeline = [
 ]
 
 evaluation = dict(
-    interval=1,
+    interval=100,
     metric='sgdet',
     relation_mode=True,
     classwise=True,
@@ -221,7 +221,8 @@ runner = dict(type='IterBasedRunner', max_iters=60000)
 project_name = 'psgformer'
 expt_name = 'psgtr_r50_psg_0.5_scale_mask'
 work_dir = f'./work_dirs/{expt_name}'
-checkpoint_config = dict(interval=1, max_keep_ckpts=10)
+checkpoint_config = dict(interval=100, max_keep_ckpts=10)
+workflow = [('train', 100), ('val', 1)]
 
 log_config = dict(
     interval=50,
