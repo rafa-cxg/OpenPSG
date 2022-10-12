@@ -110,7 +110,7 @@ dataset_config=dataset_config,
     object_classes=object_classes,
     predicate_classes=predicate_classes,
     use_mask=True,
-    num_query=100,
+    num_query=110,
 ), )
 
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53],
@@ -191,7 +191,7 @@ evaluation = dict(
     relation_mode=True,
     classwise=True,
     iou_thrs=0.5,
-    detection_method='pan_seg',
+    detection_method='bbox', #'pan_seg',
     save_best='sgdet_score',
     greater_keys='sgdet_score'
 )
@@ -199,7 +199,7 @@ evaluation = dict(
 data = dict(samples_per_gpu=1,
             workers_per_gpu=0,
             train=dict(pipeline=train_pipeline,
-                       resample= dataset_resample
+                       # resample= dataset_resample
                        ),
             val=dict(pipeline=test_pipeline),
             test=dict(pipeline=test_pipeline))

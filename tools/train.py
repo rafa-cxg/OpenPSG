@@ -221,7 +221,7 @@ def main():
     if args.freeze :
         for name, para in model.named_parameters():
             # 除最后的全连接层外，其他权重全部冻结
-            if "rel_cls_embed_tail" not in name:
+            if "_tail" not in name:
                 para.requires_grad = False
         pg = [name for name, p in model.named_parameters() if p.requires_grad]
         print('require_grad:{}'.format(pg))
