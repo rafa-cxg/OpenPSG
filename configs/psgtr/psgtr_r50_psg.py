@@ -240,4 +240,4 @@ log_config = dict(
     ],
 )
 
-# load_from = 'work_dirs/checkpoints/detr_pan_r50.pth'
+load_from = 'work_dirs/psgtr_r50_psg_0.5_scale_mask/iter_900.pth'

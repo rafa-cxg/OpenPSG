@@ -187,7 +187,7 @@ class PSGTrHead(AnchorFreeHead):
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = build_sampler(sampler_cfg, context=self)
         self.num_query = num_query
-        self.num_query_tail=30
+        self.num_query_tail=10
         self.num_query_head=num_query-self.num_query_tail
         self.num_classes = num_classes
         self.num_relations = num_relations
@@ -247,7 +247,6 @@ class PSGTrHead(AnchorFreeHead):
                                                  f' and {num_feats}.'
         self._init_layers()
 
-
     def _init_layers(self):
         """Initialize layers of the transformer head."""
         self.input_proj = Conv2d(self.in_channels,
@@ -255,12 +254,17 @@ class PSGTrHead(AnchorFreeHead):
                                  kernel_size=1)
         # self.query_embed_head = nn.Embedding(self.num_query-self.num_query_tail, self.embed_dims)
         # self.query_embed_tail = nn.Embedding(self.num_query_tail, self.embed_dims)
-        self.query_embed = nn.Embedding(self.num_query, self.embed_dims)
+        self.query_embed = nn.Embedding(self.num_query_head, self.embed_dims)
+        self.query_embed_tail = nn.Embedding(self.num_query_tail, self.embed_dims)
         self.obj_cls_embed = Linear(self.embed_dims, self.obj_cls_out_channels)
         self.obj_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
         self.sub_cls_embed = Linear(self.embed_dims, self.sub_cls_out_channels)
         self.sub_box_embed = MLP(self.embed_dims, self.embed_dims, 4, 3)
         self.rel_cls_embed = Linear(self.embed_dims, self.rel_cls_out_channels)
+        self.obj_cls_embed_tail =  Linear(self.embed_dims, self.obj_cls_out_channels)
+        self.obj_box_embed_tail =  MLP(self.embed_dims, self.embed_dims, 4, 3)
+        self.sub_cls_embed_tail =  Linear(self.embed_dims, self.sub_cls_out_channels)
+        self.sub_box_embed_tail =  MLP(self.embed_dims, self.embed_dims, 4, 3)
         self.rel_cls_embed_tail = Linear(self.embed_dims, self.num_relations_tail+1)
 
         if self.use_mask:
@@ -272,6 +276,14 @@ class PSGTrHead(AnchorFreeHead):
                                                      self.embed_dims,
                                                      self.n_heads,
                                                      dropout=0.0)
+            self.sub_bbox_attention_tail = MHAttentionMap(self.embed_dims,
+                                                     self.embed_dims,
+                                                     self.n_heads,
+                                                     dropout=0.0)
+            self.obj_bbox_attention_tail = MHAttentionMap(self.embed_dims,
+                                                     self.embed_dims,
+                                                     self.n_heads,
+                                                     dropout=0.0)
             if not self.swin:
                 self.sub_mask_head = MaskHeadSmallConv(
                     self.embed_dims + self.n_heads, [1024, 512, 256],
@@ -279,11 +291,19 @@ class PSGTrHead(AnchorFreeHead):
                 self.obj_mask_head = MaskHeadSmallConv(
                     self.embed_dims + self.n_heads, [1024, 512, 256],
                     self.embed_dims)
+                self.sub_mask_head_tail = MaskHeadSmallConv(
+                    self.embed_dims + self.n_heads, [1024, 512, 256],
+                    self.embed_dims)
+                self.obj_mask_head_tail = MaskHeadSmallConv(
+                    self.embed_dims + self.n_heads, [1024, 512, 256],
+                    self.embed_dims)
             elif self.swin:
                 self.sub_mask_head = MaskHeadSmallConv(
                     self.embed_dims + self.n_heads, self.swin, self.embed_dims)
                 self.obj_mask_head = MaskHeadSmallConv(
                     self.embed_dims + self.n_heads, self.swin, self.embed_dims)
+
+
 
     def init_weights(self):
         """Initialize weights of the transformer head."""
@@ -296,6 +316,7 @@ class PSGTrHead(AnchorFreeHead):
                               missing_keys, unexpected_keys, error_msgs):
         """load checkpoints."""
         version = local_metadata.get('version', None)
+
         if (version is None or version < 2):
             convert_dict = {
                 '.self_attn.': '.attentions.0.',
@@ -311,6 +332,16 @@ class PSGTrHead(AnchorFreeHead):
                         convert_key = k.replace(ori_key, convert_key)
                         state_dict[convert_key] = state_dict[k]
                         del state_dict[k]
+
+        mapping=[]
+        for name, para in self.named_parameters():
+            adding_dict={}
+            # 除最后的全连接层外，其他权重全部冻结
+            if "_tail"  in name:
+                adding_dict['bbox_head.'+name] = state_dict['bbox_head.'+name.replace('_tail','')]
+                state_dict.update(adding_dict)
+                mapping.append(name)
+        print('mapping {} to head weight in pretrained model'.format(mapping))
         super(AnchorFreeHead,
               self)._load_from_state_dict(state_dict, prefix, local_metadata,
                                           strict, missing_keys,
@@ -338,7 +369,7 @@ class PSGTrHead(AnchorFreeHead):
         pos_embed = self.positional_encoding(masks)  # [bs, embed_dim, h, w]
         # outs_dec: [nb_dec, bs, num_query, embed_dim]
         outs_dec, memory = self.transformer(last_features, masks,
-                                            self.query_embed.weight, pos_embed)
+                                            torch.cat((self.query_embed.weight,self.query_embed_tail.weight),0), pos_embed)
         #用于替换  self.query_embed.weight torch.cat((self.query_embed_head.weight, self.query_embed_tail.weight), 0)
         #################
         #only use  new decoder
@@ -372,25 +403,23 @@ class PSGTrHead(AnchorFreeHead):
         # sub_outputs_class=torch.cat((sub_outputs_class_head,))
         # rel_outputs_class_head = self.rel_cls_embed_head(outs_dec_head)
         # rel_outputs_class_tail = self.rel_cls_embed_tail(outs_dec_tail)
+        outs_dec_tail=outs_dec[...,self.num_query_head:,:]
+        outs_dec_head = outs_dec[..., :self.num_query_head, :]
+        sub_outputs_class_head = self.sub_cls_embed(outs_dec_head)
+        sub_outputs_coord_head = self.sub_box_embed(outs_dec_head).sigmoid()
+        obj_outputs_class_head = self.obj_cls_embed(outs_dec_head)
+        obj_outputs_coord_head = self.obj_box_embed(outs_dec_head).sigmoid()
+        sub_outputs_class_tail = self.sub_cls_embed_tail(outs_dec_tail)
+        sub_outputs_coord_tail = self.sub_box_embed_tail(outs_dec_tail).sigmoid()
+        obj_outputs_class_tail = self.obj_cls_embed_tail(outs_dec_tail)
+        obj_outputs_coord_tail = self.obj_box_embed_tail(outs_dec_tail).sigmoid()
 
-        sub_outputs_class = self.sub_cls_embed(outs_dec)
-        sub_outputs_coord = self.sub_box_embed(outs_dec).sigmoid()
-        obj_outputs_class = self.obj_cls_embed(outs_dec)
-        obj_outputs_coord = self.obj_box_embed(outs_dec).sigmoid()
 
-        sub_outputs_class_head=sub_outputs_class[...,:self.num_query_head,:]
-        # sub_outputs_coord_head=sub_outputs_coord[...,:self.num_query_head,:]
-        obj_outputs_class_head=obj_outputs_class[...,:self.num_query_head,:]
-        # obj_outputs_coord_head=obj_outputs_coord[...,:self.num_query_head,:]
-        sub_outputs_class_tail=sub_outputs_class[...,self.num_query_head:,:]
-        # sub_outputs_coord_tail=sub_outputs_coord[...,self.num_query_head:,:]
-        obj_outputs_class_tail=obj_outputs_class[...,self.num_query_head:,:]
-        # obj_outputs_coord_tail=obj_outputs_coord[...,self.num_query_head:,:]
         all_cls_scores_head = dict(sub=sub_outputs_class_head, obj=obj_outputs_class_head)
         all_cls_scores_tail = dict(sub=sub_outputs_class_tail, obj=obj_outputs_class_tail)
 
-        rel_outputs_class_head = self.rel_cls_embed(outs_dec[:,:,:(self.num_query-self.num_query_tail),:])
-        rel_outputs_class_tail = self.rel_cls_embed_tail(outs_dec[:,:,((self.num_query-self.num_query_tail)):,:])
+        rel_outputs_class_head = self.rel_cls_embed(outs_dec_head)
+        rel_outputs_class_tail = self.rel_cls_embed_tail(outs_dec_tail)
 
         if self.use_bias:  # default false
             pair_pred = torch.cat((torch.argmax(sub_outputs_class, -1, keepdim=True), torch.argmax(obj_outputs_class,
@@ -414,39 +443,59 @@ class PSGTrHead(AnchorFreeHead):
         temp=[0]
 
         temp.extend(self.tail_relation_idx)
-        self.map_rel_outputs_class_tail_to_all=map_rel_outputs_class_tail_to_all.scatter_(-1, torch.tensor(temp).unsqueeze(0).unsqueeze(0).cuda().repeat(6,1,30,1), rel_outputs_class_tail)
+        self.map_rel_outputs_class_tail_to_all=map_rel_outputs_class_tail_to_all.scatter_(-1, torch.tensor(temp).unsqueeze(0).unsqueeze(0).cuda().repeat(6,1,self.num_query_tail,1), rel_outputs_class_tail)
         all_cls_scores_tail['rel'] = rel_outputs_class_tail   #map_rel_outputs_class_tail_to_all
         # all_cls_scores['rel']=torch.cat((rel_outputs_class_head,map_rel_outputs_class_tail_to_all),2)
         if self.use_mask:
             ###########for segmentation#################
-            sub_bbox_mask = self.sub_bbox_attention(outs_dec[-1],
+            sub_bbox_mask_head = self.sub_bbox_attention(outs_dec_head[-1],
                                                     memory,
                                                     mask=masks)
-            obj_bbox_mask = self.obj_bbox_attention(outs_dec[-1],
+            obj_bbox_mask_head = self.obj_bbox_attention(outs_dec_head[-1],
                                                     memory,
                                                     mask=masks)
-            sub_seg_masks = self.sub_mask_head(last_features, sub_bbox_mask,
+            sub_seg_masks_head = self.sub_mask_head(last_features, sub_bbox_mask_head,
                                                [feats[2], feats[1], feats[0]])
-            outputs_sub_seg_masks = sub_seg_masks.view(batch_size,
-                                                       self.num_query,
-                                                       sub_seg_masks.shape[-2],
-                                                       sub_seg_masks.shape[-1])
-            obj_seg_masks = self.obj_mask_head(last_features, obj_bbox_mask,
+            outputs_sub_seg_masks_head = sub_seg_masks_head.view(batch_size,
+                                                       self.num_query_head,
+                                                       sub_seg_masks_head.shape[-2],
+                                                       sub_seg_masks_head.shape[-1])
+            obj_seg_masks_head = self.obj_mask_head(last_features, obj_bbox_mask_head,
                                                [feats[2], feats[1], feats[0]])
-            outputs_obj_seg_masks = obj_seg_masks.view(batch_size,
-                                                       self.num_query,
-                                                       obj_seg_masks.shape[-2],
-                                                       obj_seg_masks.shape[-1])
+            outputs_obj_seg_masks_head = obj_seg_masks_head.view(batch_size,
+                                                       self.num_query_head,
+                                                       obj_seg_masks_head.shape[-2],
+                                                       obj_seg_masks_head.shape[-1])
 
-            all_bbox_preds_head = dict(sub=sub_outputs_coord[...,:self.num_query_head,:],
-                                  obj=obj_outputs_coord[...,:self.num_query_head,:],
-                                  sub_seg=outputs_sub_seg_masks[:,:self.num_query_head,...],
-                                  obj_seg=outputs_obj_seg_masks[:,:self.num_query_head,...])
+            #######################for tail ##############################
+            sub_bbox_mask_tail = self.sub_bbox_attention_tail(outs_dec_tail[-1],
+                                                    memory,
+                                                    mask=masks)
+            obj_bbox_mask_tail = self.obj_bbox_attention_tail(outs_dec_tail[-1],
+                                                    memory,
+                                                    mask=masks)
+            sub_seg_masks_tail = self.sub_mask_head_tail(last_features, sub_bbox_mask_tail,
+                                               [feats[2], feats[1], feats[0]])
+            outputs_sub_seg_masks_tail = sub_seg_masks_tail.view(batch_size,
+                                                       self.num_query_tail,
+                                                       sub_seg_masks_tail.shape[-2],
+                                                       sub_seg_masks_tail.shape[-1])
+            obj_seg_masks_tail = self.obj_mask_head_tail(last_features, obj_bbox_mask_tail,
+                                               [feats[2], feats[1], feats[0]])
+            outputs_obj_seg_masks_tail = obj_seg_masks_tail.view(batch_size,
+                                                       self.num_query_tail,
+                                                       obj_seg_masks_tail.shape[-2],
+                                                       obj_seg_masks_tail.shape[-1])
 
-            all_bbox_preds_tail = dict(sub=sub_outputs_coord[...,self.num_query_head:,:],
-                                  obj=obj_outputs_coord[...,self.num_query_head:,:],
-                                  sub_seg=outputs_sub_seg_masks[:,self.num_query_head:,...],
-                                  obj_seg=outputs_obj_seg_masks[:,self.num_query_head:,...])
+            all_bbox_preds_head = dict(sub=sub_outputs_coord_head,
+                                  obj=obj_outputs_coord_head,
+                                  sub_seg=outputs_sub_seg_masks_head,
+                                  obj_seg=outputs_obj_seg_masks_head)
+
+            all_bbox_preds_tail = dict(sub=sub_outputs_coord_tail,
+                                  obj=obj_outputs_coord_tail,
+                                  sub_seg=outputs_sub_seg_masks_tail,
+                                  obj_seg=outputs_obj_seg_masks_tail)
         else:
             all_bbox_preds = dict(sub=sub_outputs_coord, obj=obj_outputs_coord)
         return (all_cls_scores_head, all_bbox_preds_head), (all_cls_scores_tail, all_bbox_preds_tail)
@@ -979,7 +1028,7 @@ class PSGTrHead(AnchorFreeHead):
         """
         assert proposal_cfg is None, '"proposal_cfg" must be None'
         outs_head, outs_tail = self(x, img_metas)
-        flag_no_tail_label=False
+
 
         if gt_labels is None:
             loss_inputs = outs + (gt_rels, gt_bboxes, gt_masks, img_metas)
@@ -988,16 +1037,15 @@ class PSGTrHead(AnchorFreeHead):
                                   img_metas)
             gt_rels_tail=[]
             gt_rel_tail = []
-            for gt_rel in gt_rels:#gt_rels list[bs_pergpu]
+            for gt_rel in gt_rels:
                 for rel in gt_rel:
                     if rel[-1] in  self.tail_relation_idx:
 
-                        gt_rel_tail.append(torch.tensor(self.tail_relation_idx.index(rel[-1])+1).cuda())# 还要算上0类！所以要+1
+                        gt_rel_tail.append(torch.tensor(self.tail_relation_idx.index(rel[-1])+1).cuda())
                     else:
 
                         gt_rel_tail.append(torch.tensor([0]).cuda())
                 gt_rel_tail=torch.tensor(gt_rel_tail).cuda()
-
                 triplet=torch.cat((gt_rel[:,:2],gt_rel_tail.unsqueeze(1)),-1)
                 gt_rels_tail.append(triplet)
             loss_inputs_tail = outs_tail + (gt_rels_tail, gt_bboxes, gt_labels, gt_masks,
@@ -1015,7 +1063,6 @@ class PSGTrHead(AnchorFreeHead):
         self.rel_loss_cls.class_weight[0]=0.05
         self.is_head = False
         losses_tail = self.loss(*loss_inputs_tail, is_head=self.is_head, gt_bboxes_ignore=gt_bboxes_ignore)
-
         self.rel_loss_cls.class_weight = class_weight_head
         return losses_head, losses_tail
 
